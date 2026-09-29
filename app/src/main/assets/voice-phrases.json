@@ -1,0 +1,48 @@
+{
+  "_readme": "Edit the phrases here to change what Eve understands. Use ONLY common English words (lowercase, no punctuation). Every word must exist in the Vosk model vocabulary - the build prints a warning for any word it does not know. Keep 'eve' as the wake word unless you test another one.",
+  "wakeWords": ["eve"],
+  "wakePrefixes": ["hey", "okay"],
+  "awakeMs": 8000,
+  "numberVerbs": ["tap", "press"],
+  "maxNumber": 40,
+  "commands": {
+    "nav_students":   ["go to students", "go to the students tab", "go to the student tab", "go to student tab", "open students", "open the students tab", "students", "students tab", "student tab", "go to year level", "open year level", "year level"],
+    "nav_records":    ["go to records", "go to the records tab", "open records", "open the records tab", "records", "records tab"],
+    "nav_classfund":  ["go to class fund", "go to the class fund tab", "open class fund", "class fund", "class fund tab"],
+    "nav_cashbook":   ["go to cash book", "go to the cash book tab", "open cash book", "open the cash book tab", "cash book", "cash book tab"],
+    "nav_summary":    ["go to summary", "go to the summary tab", "open summary", "open the summary tab", "summary", "summary tab", "show summary"],
+    "nav_backup":     ["go to back up", "go to the back up tab", "open back up", "open the back up tab", "back up tab"],
+    "do_backup":      ["back up my data", "export my data", "export back up", "save a back up"],
+
+    "open_calculator": ["open calculator", "open the calculator", "calculator", "show calculator"],
+    "open_notes":      ["open notes", "open the notes", "open my notes", "notes", "show notes"],
+    "open_guide":      ["open guide", "open the guide", "show guide", "guide"],
+    "settings_open":   ["open settings", "open the settings", "settings", "show settings"],
+    "settings_close":  ["close settings", "close the settings"],
+    "theme_dark":      ["dark mode", "turn on dark mode", "switch to dark mode"],
+    "theme_light":     ["light mode", "turn on light mode", "switch to light mode"],
+    "theme_toggle":    ["toggle theme", "change theme"],
+    "switch_mode":     ["switch mode", "change mode", "toggle mode"],
+    "confirm":         ["confirm", "yes", "yes confirm", "yes switch", "confirm switch"],
+
+    "go_back":         ["cancel", "close", "close this", "close it", "go back", "back", "never mind", "dismiss"],
+    "undo":            ["undo", "undo that", "undo last action"],
+    "redo":            ["redo", "redo that"],
+    "scroll_down":     ["scroll down", "page down", "go down"],
+    "scroll_up":       ["scroll up", "page up", "go up"],
+    "scroll_top":      ["go to the top", "scroll to the top", "scroll to top", "go to top"],
+    "scroll_bottom":   ["go to the bottom", "scroll to the bottom", "scroll to bottom", "go to bottom"],
+
+    "read_cash":       ["read summary", "read my balance", "how much cash do i have", "cash on hand", "what is my balance", "what is my cash on hand"],
+
+    "show_numbers":    ["show numbers", "show the numbers", "number the buttons", "turn on numbers"],
+    "hide_numbers":    ["hide numbers", "hide the numbers", "remove numbers", "turn off numbers"],
+    "dictate":         ["dictate", "start dictation", "start typing", "type for me"],
+    "clear_field":     ["clear field", "clear the field", "clear text"],
+
+    "help":            ["help", "what can i say", "show commands", "voice help", "show help"],
+    "thanks":          ["thank you", "thanks"],
+    "stop_listening":  ["stop listening", "go to sleep", "turn off voice", "voice off"]
+  },
+  "dictationEndWords": ["done", "finished", "enter", "stop dictation"]
+}

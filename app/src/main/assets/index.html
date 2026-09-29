@@ -1,1 +1,1396 @@
+<!DOCTYPE html>
+  <html lang="en">
+  <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Org/Class Treas. Recorder V2.6.0</title>
+  <link rel="stylesheet" href="style.css">
+  <base target="_blank">
+  <base target="_blank">
+  <base target="_blank">
+  
+  <style>
+    /* Full-screen utility overlays for Calculator and Notes */
+    .blurred-modal-overlay,
+    .fullscreen-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 2000;
+      display: flex;
+      align-items: stretch;
+      justify-content: center;
+      background: rgba(18, 26, 22, .88);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      overflow: auto;
+    }
+    .blurred-modal-overlay.hidden,
+    .fullscreen-overlay.hidden,
+    .hidden { display: none !important; }
+    .fullscreen-panel,
+    .blurred-modal-panel {
+      width: 100%;
+      min-height: 100dvh;
+      box-sizing: border-box;
+      padding: clamp(16px, 4vw, 34px);
+      background: var(--surface, #fff);
+      color: var(--ink, #222);
+      overflow-y: auto;
+    }
+    .fullscreen-header {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 12px;
+      align-items: center;
+    }
+    .fullscreen-header > :last-child { justify-self: end; }
+    .fullscreen-header > :first-child { justify-self: start; }
+    .fullscreen-header h3 { text-align: center; }
+    /* Keep financial overview text fully visible; do not inherit faded card styles. */
+    #summary-dashboard-metrics,
+    #summary-dashboard-metrics *,
+    #cashbook-summary,
+    #cashbook-summary *,
+    #eve-summary-view,
+    #eve-summary-view *,
+    .summary-card,
+    .summary-card *,
+    .eve-summary-card,
+    .eve-summary-card *,
+    .eve-guide-section,
+    .eve-guide-section * {
+      opacity: 1 !important;
+    }
+    .summary-card h4, .summary-card p,
+    .eve-summary-card h4, .eve-summary-card p { opacity: 1 !important; }
+    .eve-summary-card p { text-shadow: none; }
+    .calc-body { max-width: 720px; margin: 0 auto; }
+    #eve-calc-overlay .calc-body { max-width: none; }
+    #eve-calc-overlay .calc-keys, #eve-calc-overlay .calc-display { max-width: 720px; margin-left: auto; margin-right: auto; }
+    .calc-display {
+      width: 100%; min-height: 78px; box-sizing: border-box; margin: 20px 0;
+      padding: 18px; border-radius: 14px; overflow-x: auto; text-align: right;
+      font: 700 clamp(30px, 8vw, 52px)/1.1 'IBM Plex Mono', monospace;
+      background: var(--surface-alt, #f3f1ed); border: 1px solid var(--hairline, #ddd);
+    }
+    .calc-keys { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+    .calc-keys button { min-height: clamp(58px, 12vw, 86px); font-size: clamp(20px, 5vw, 30px); }
+    .calc-eq { background: var(--accent, #3b6e8f) !important; color: #fff !important; }
+    #notes-folder-list { display: grid; gap: 12px; max-width: 900px; margin: 0 auto; }
+    .note-card { display: flex; gap: 12px; align-items: center; padding: 16px; border: 1px solid var(--hairline, #ddd); border-radius: 12px; background: var(--surface-alt, #f8f7f4); }
+    .note-card-content { flex: 1; min-width: 0; cursor: pointer; }
+    .note-card-title { font-weight: 700; overflow-wrap: anywhere; }
+    .note-card-preview { margin-top: 4px; color: var(--muted, #6e7a72); white-space: pre-wrap; overflow-wrap: anywhere; }
+    .note-delete { width: auto; padding: 8px 12px; background: transparent; color: var(--muted, #6e7a72); border: 1px solid var(--hairline, #ddd); }
+    @media (max-width: 560px) { .fullscreen-header { grid-template-columns: auto 1fr auto; } .fullscreen-header h3 { font-size: 18px; } }
 
+    /* Floating dropdown box (e.g. Payment/Remittance History) — overlays content
+       instead of pushing it down, so the layout underneath never shifts. */
+    .auto-close-dropdown-scope { position: relative; }
+    .floating-dropdown-panel {
+      position: absolute;
+      top: calc(100% + 6px);
+      left: 0;
+      right: 0;
+      z-index: 60;
+      margin-top: 0 !important;
+      background: var(--surface, #fff);
+      border: 1px solid var(--hairline, #ddd);
+      border-radius: var(--radius-sm, 10px);
+      box-shadow: 0 14px 32px rgba(0,0,0,0.22);
+      padding: 6px;
+      max-height: 240px;
+      overflow-y: auto;
+      box-sizing: border-box;
+    }
+    .floating-dropdown-panel.hidden { display: none !important; }
+    .floating-dropdown-panel .history-box {
+      background: var(--surface-alt);
+      border-radius: var(--radius-sm);
+    }
+  </style>
+</head>
+
+  <body>
+
+
+  <!-- TOP BAR: theme / style toggles + watermark -->
+  <div class="top-bar">
+      <div class="toggle-group">
+      <div class="settings-dropdown" id="settings-dropdown">
+        <button id="settings-toggle" class="icon-toggle" onclick="toggleSettingsMenu(event)" title="Settings">⚙️</button>
+        <div id="settings-menu" class="settings-menu hidden">
+          <div class="settings-menu-item">
+            
+            <button id="theme-toggle" class="icon-toggle" onclick="toggleTheme(); closeSettingsMenu();" title="Switch light / dark mode">🌙</button>
+          <span class="settings-menu-text">Toggle Theme</span>
+          </div>
+          <div class="settings-menu-item">
+            
+            <button id="mode-toggle" class="icon-toggle" onclick="switchMode(); closeSettingsMenu();" title="Switch Org / Class mode" style="font-size:11px; font-weight:700; font-family:'IBM Plex Mono',monospace; width:auto; padding:0 14px; border-radius:20px;">ORG</button>
+          <span class="settings-menu-text">Toggle Mode</span>
+          </div>
+          <div class="settings-menu-item">
+            
+            <button id="notes-toggle" class="icon-toggle" onclick="openNotesModal(); closeSettingsMenu();" title="Notes">📝</button>
+          <span class="settings-menu-text">Notepad</span>
+          </div>
+          <div class="settings-menu-item">
+            
+            <button id="calc-toggle" class="icon-toggle" onclick="openCalcModal(); closeSettingsMenu();" title="Calculator">📱</button>
+          <span class="settings-menu-text">Calculator</span>
+          </div>
+          <div class="settings-menu-item">
+            <button id="voice-settings-toggle" class="icon-toggle" onclick="EveVoiceAssistant.openPanel(); closeSettingsMenu();" title="Voice Assistant (offline)">🎙️</button>
+          <span class="settings-menu-text">Voice Assistant</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="right-group">
+      <div class="undo-redo-group">
+        <button id="undo-btn" class="icon-toggle" onclick="performUndo()" title="Undo last action" disabled>↺</button>
+        <button id="redo-btn" class="icon-toggle" onclick="performRedo()" title="Redo last action" disabled>↻</button>
+      </div>
+      <span class="watermark">@EVC <span class="version-label">V2.6.0</span></span>
+    </div>
+  </div>
+
+  <!-- ACTIVATION LOCK OVERLAY (device-bound, prevents unauthorized copies) -->
+  <div id="activation-overlay" class="activation-overlay hidden">
+    <div class="activation-card">
+      <h2 style="font-size:20px;">App Locked</h2>
+      <p class="note" style="margin-bottom:15px;">This copy of the app is not activated on this device yet. Send the Device ID below to the seller to receive your Activation Code.</p>
+
+      <p class="note">YOUR DEVICE ID</p>
+      <div id="device-id-display" class="device-id-box">Loading...</div>
+
+      <input type="text" id="activation-code-input" placeholder="Enter Activation Code" style="margin-top:15px; text-transform:uppercase;">
+      <button class="full-btn" onclick="submitActivationCode()">Activate</button>
+      <p class="note" id="activation-error" style="color:#B3423B; margin-top:10px;"></p>
+    </div>
+  </div>
+
+
+<!-- =========================================================================
+   2. COLLECTION REMITTANCE WORKFLOW PROFILE MANAGER MODAL
+========================================================================= -->
+<div id="remit-manager-modal" class="modal-overlay" style="display: none;">
+  <div class="modal-content" style="max-width: 440px; padding: 24px; text-align: left; box-sizing: border-box; position: relative;">
+    
+    <!-- FIXED: Added width: auto !important to prevent the close box from stretching across your screen horizontally -->
+    <button type="button" class="close-btn" onclick="closeRemitManagerModal()" 
+            style="position: absolute !important; top: 16px !important; right: 16px !important; width: auto !important; max-width: 32px !important; min-width: 0 !important; height: auto !important; background: none !important; border: none !important; font-size: 22px !important; color: var(--muted, #6E7A72) !important; cursor: pointer !important; padding: 4px !important; line-height: 1 !important; display: inline-block !important; box-shadow: none !important; transform: none !important; z-index: 10;">✕</button>
+    
+    <h3 style="margin-bottom: 4px; padding-bottom: 8px; padding-right: 40px; font-family: 'Fraunces', serif; font-size: 19px; font-weight: 600; color: var(--accent-dark); border-bottom: 1.5px dashed var(--hairline); position: relative;">
+      <span class="eve-summary-badge" style="background: var(--accent-2); color: white; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.5px; display: inline-block; vertical-align: middle; margin-right: 4px;">Remit</span> Workflow Profile
+    </h3>
+    <p class="note" id="remit-modal-cat-title" style="font-weight: 700; color: var(--accent-dark); font-size: 13.5px; margin-top: 10px; margin-bottom: 18px; text-transform: uppercase; letter-spacing: 0.5px; font-family: 'Inter', sans-serif;"></p>
+    
+    <div style="display: flex; flex-direction: column; gap: 14px;">
+      <!-- Workflow Status Controller Selector Selection Option Box -->
+      <div>
+        <label class="note" for="remit-modal-status" style="font-weight: 700; color: var(--ink); display: block; margin-bottom: 6px; font-size: 12.5px;">Remittance Status</label>
+        <select id="remit-modal-status" style="width: 100%; font-weight: 600; height: 52px; box-sizing: border-box; background: var(--surface); color: var(--ink); border: 1.5px solid var(--hairline); border-radius: var(--radius-sm); padding: 13px 16px; font-size: 15px;">
+          <option value="unremitted">⭕ Unremitted / Pending Turnover Process</option>
+          <option value="remitted">🟢 Remitted Cleanly to Main Campus Treasurer</option>
+        </select>
+      </div>
+
+      <!-- 🔴 ADD THIS NEW DATE FIELD CONTAINER RIGHT HERE -->
+<div style="margin-top: 12px;">
+  <label class="note" style="display: block; margin-bottom: 4px;">Remittance Date</label>
+  <input type="date" id="remit-modal-date" style="width: 100%; height: 46px; padding: 11px 13px; border-radius: 12px; border: 1.5px solid var(--hairline); background: var(--surface);">
+</div>
+
+
+
+      <!-- Descriptive Processing Audit Notes Area Field -->
+      <div>
+        <label class="note" for="remit-modal-notes" style="font-weight: 700; color: var(--ink); display: block; margin-bottom: 6px; font-size: 12.5px;">Notes</label>
+        <textarea id="remit-modal-notes" rows="4" placeholder="Details..." 
+                  style="width: 100%; height: 110px; padding: 12px 14px; font-size: 15px; border: 1.5px solid var(--hairline); border-radius: var(--radius-sm); resize: none; font-family: 'Inter', sans-serif; color: var(--ink); background: var(--surface); box-sizing: border-box; transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);"></textarea>
+      </div>
+
+      <!-- Panel Confirmation Options Row Button Stack -->
+      <div style="display: flex; gap: 10px; margin-top: 6px; width: 100%; box-sizing: border-box;">
+        <button type="button" class="btn-cancel" onclick="closeRemitManagerModal()" style="flex: 1; height: 46px; padding: 0 16px; font-weight: 600; cursor: pointer;">Cancel</button>
+        <button type="button" class="btn-save" onclick="saveCollectionRemittanceData()" style="flex: 1; height: 46px; padding: 0 16px; font-weight: 600; cursor: pointer;">Save Changes</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+
+  <!-- MODE SELECTOR OVERLAY -->
+  <div id="mode-overlay" class="activation-overlay hidden">
+    <div class="activation-card" style="max-width: 420px;">
+      <h2 style="font-size:22px; margin-bottom:8px;">Select Mode</h2>
+      <p class="note" style="margin-bottom:20px;">Choose how you'll use this app. You can change this later via the top-bar toggle.</p>
+      <button class="full-btn" onclick="setMode('org')" style="margin-bottom:12px; padding:16px;">
+        <div style="font-size:16px; font-weight:700;">🏛️ Organization Treasurer</div>
+        <div style="font-size:12px; font-weight:400; opacity:0.8; margin-top:4px;">Cash Book • Projects • Financial Statements</div>
+      </button>
+      <button class="full-btn" onclick="setMode('class')" style="background: linear-gradient(135deg, var(--accent-2), var(--warning)); padding:16px;">
+        <div style="font-size:16px; font-weight:700;">🎓 Class Treasurer</div>
+        <div style="font-size:12px; font-weight:400; opacity:0.8; margin-top:4px;">Student Collections • Simple Tracking</div>
+      </button>
+    </div>
+  </div>
+
+  <!-- MODE SWITCH CONFIRM MODAL -->
+  <div id="mode-switch-confirm-modal" class="activation-overlay hidden">
+    <div class="activation-card" style="max-width: 380px;">
+      <h2 style="font-size:19px;">Switch Mode?</h2>
+      <p class="note" style="margin-bottom:18px;">Switching between Organization and Class mode will reload the app. Your data for both modes is kept safe.</p>
+      <button class="full-btn" onclick="confirmSwitchMode()">Yes, Switch &amp; Reload</button>
+      <button class="full-btn btn-cancel" onclick="closeSwitchModeConfirm()" style="margin-top:10px;">Cancel</button>
+    </div>
+  </div>
+
+  <!-- PIN LOCK OVERLAY (protects the app every time it's opened) -->
+  <div id="pin-overlay" class="activation-overlay hidden">
+    <div class="activation-card">
+      <h2 id="pin-title" style="font-size:20px;">Enter PIN</h2>
+      <p class="note" id="pin-subtext" style="margin-bottom:15px;">Enter your 4-digit PIN to continue.</p>
+
+      <input type="password" id="pin-input" inputmode="numeric" maxlength="4" placeholder="••••" style="text-align:center; letter-spacing:10px; font-size:24px;">
+      <button class="full-btn" onclick="submitPin()">Unlock</button>
+      <p class="note" id="pin-error" style="color:#B3423B; margin-top:10px;"></p>
+      <p class="note" style="margin-top:15px; cursor:pointer; text-decoration:underline;" onclick="forgotPin()">Forgot PIN?</p>
+    </div>
+  </div>
+
+  <!-- ADD ALL YEAR LEVEL MODAL -->
+  <div id="add-all-modal" class="activation-overlay hidden">
+
+    <div class="activation-card" style="max-width: 520px; width: 100%; padding: 28px 24px;">
+      <div class="item-header" style="border:none; padding-bottom:10px; margin-bottom:6px;">
+        <h3 style="margin-bottom:0; padding-bottom:0;">Add Year Levels</h3>
+        <button onclick="closeAddAllModal()" style="width:auto; height:auto; padding:8px 16px; font-size:13px;">✕ Close</button>
+      </div>
+      <p class="note" style="margin-bottom:14px;">Select which year levels to enroll in <b id="add-all-cat-name">this collection</b>. Search to filter the list.</p>
+          <div class="row" style="margin-bottom:10px; gap:8px;">
+        <input type="text" id="add-all-search" placeholder="Search year level..." oninput="renderAddAllList()" style="flex:1; margin-bottom:0;">
+        <button onclick="selectAllAddAll()" style="width:auto; padding:0 16px; white-space:nowrap;">Select All</button>
+        <button onclick="deselectAllAddAll()" style="width:auto; padding:0 16px; white-space:nowrap; background:var(--surface); color:var(--ink); border:1.5px solid var(--hairline);">Deselect All</button>
+      </div>
+      <div id="add-all-list" style="max-height: 55vh; overflow-y: auto; margin-bottom: 18px; padding-right: 4px;"></div>
+      <div class="row" style="margin-bottom:0; gap:12px;">
+        <button class="full-btn" onclick="confirmAddAll()" style="flex:1; margin-top:0;">Add Selected</button>
+        <button class="full-btn btn-cancel" onclick="closeAddAllModal()" style="flex:1; margin-top:0;">Cancel</button>
+      </div>
+      <p class="note" id="add-all-status" style="margin-top:12px; text-align:center; font-weight:600;"></p>
+    </div>
+  </div>
+
+  <!-- QUICK PAY MODAL -->
+  <div id="quick-pay-modal" class="activation-overlay hidden">
+    <div class="activation-card" style="max-width: 520px; width: 100%; padding: 28px 24px;">
+      <div class="item-header" style="border:none; padding-bottom:10px; margin-bottom:6px;">
+        <h3 style="margin-bottom:0; padding-bottom:0;">Quick Pay</h3>
+        <button onclick="closeQuickPayModal()" style="width:auto; height:auto; padding:8px 16px; font-size:13px;">✕ Close</button>
+      </div>
+      <p class="note" style="margin-bottom:14px;">Record the same payment for multiple <span id="quick-pay-noun">year levels</span> in <b id="quick-pay-cat-label">this collection</b> at once.</p>
+
+      <div class="row" style="margin-bottom:10px;">
+        <input type="date" id="quick-pay-modal-date">
+        <input type="number" id="quick-pay-modal-amount" placeholder="Amount per student" step="0.01">
+      </div>
+      <div class="row" style="margin-bottom:10px;">
+        <input type="text" id="quick-pay-modal-note" placeholder="Note (optional)">
+      </div>
+
+      <div class="row" style="margin-bottom:10px; gap:8px;">
+        <input type="text" id="quick-pay-search" placeholder="Search..." oninput="renderQuickPayList()" style="flex:1; margin-bottom:0;">
+        <button onclick="selectAllQuickPay()" style="width:auto; padding:0 16px; white-space:nowrap;">Select All</button>
+        <button onclick="deselectAllQuickPay()" style="width:auto; padding:0 16px; white-space:nowrap; background:var(--surface); color:var(--ink); border:1.5px solid var(--hairline);">Deselect All</button>
+      </div>
+      <div id="quick-pay-list" style="max-height: 45vh; overflow-y: auto; margin-bottom: 18px; padding-right: 4px;"></div>
+      <div class="row" style="margin-bottom:0; gap:12px;">
+        <button class="full-btn" onclick="confirmQuickPayModal()" style="flex:1; margin-top:0;">Record Payment</button>
+        <button class="full-btn btn-cancel" onclick="closeQuickPayModal()" style="flex:1; margin-top:0;">Cancel</button>
+      </div>
+      <p class="note" id="quick-pay-status" style="margin-top:12px; text-align:center; font-weight:600;"></p>
+    </div>
+  </div>
+
+  <!-- RENAME COLLECTION MODAL -->
+  <div id="rename-modal" class="activation-overlay hidden">
+    <div class="activation-card" style="max-width: 420px;">
+      <h2 style="font-size:20px;">Rename Collection</h2>
+      <p class="note" style="margin-bottom:15px;">Enter a new name for "<b id="rename-old-name"></b>".</p>
+      <input type="text" id="rename-input" placeholder="New collection name">
+      <button class="full-btn" onclick="confirmRenameCategory()">Rename</button>
+      <button class="full-btn btn-cancel" onclick="closeRenameModal()" style="margin-top:10px;">Cancel</button>
+      <p class="note" id="rename-error" style="color:#B3423B; margin-top:10px;"></p>
+    </div>
+  </div>
+
+  <div class="container">
+    <p class="eyebrow">Digital Ledger</p>
+    <h2>TREASURER'S RECORDER</h2>
+    <hr class="header-rule">
+
+    <!-- STUDENTS (DATABASE) SECTION -->
+    <div id="database-section" class="page hidden">
+
+      <div id="student-list-view">
+        <!-- In DATABASE tab, replace the first h3: -->
+  <h3 id="db-add-header">Add Program &amp; Year Level (Permanent) <button class="tip-bulb" onclick="showFeatureTip('students-add')" title="How to add students">i</button></h3>
+        <input type="text" id="new-student-name" placeholder="e.g BSIT 2, BSIT 3">
+        <p class="note" style="margin: -4px 0 10px 0;">💡 Tip: separate multiple names with commas to add several at once.</p>
+        <button class="full-btn" onclick="addStudent()">Add Year Level <span class="tip-bulb inline-tip-bulb" role="button" tabindex="0" onclick="event.stopPropagation(); showFeatureTip('students-add')" title="Add Year Level tip">i</span></button>
+
+        <hr class="section-divider">
+
+        <!-- In DATABASE tab, replace the second h3: -->
+  <h3 id="db-list-header">Student Database <button class="tip-bulb" onclick="showFeatureTip('students-list')" title="Student database tip">i</button></h3>
+        <p class="note" id="student-count">0 program year level in the database</p>
+        <p class="note">Tap a program year level to view their balance across all collections <span class="tip-bulb inline-tip-bulb student-note-tip" role="button" tabindex="0" onclick="event.stopPropagation(); showFeatureTip('students-list')" title="Student database tip">i</span></p>
+        <input type="text" id="search-students-db" placeholder="Search Year Level..." oninput="renderStudents()">
+        <div id="student-db-list"></div>
+      </div>
+
+      <div id="student-profile-view" class="hidden">
+        <div class="item-header">
+          <button onclick="backToStudentList()">← Back</button>
+          <h3 id="profile-student-name">STUDENT NAME</h3>
+          <div></div>
+        </div>
+        <h3>Breakdown By Collection <button class="tip-bulb" onclick="showFeatureTip('students-breakdown')" title="Balance breakdown tip">i</button></h3>
+        <div id="profile-breakdown"></div>
+        <button id="org-roster-open-button" class="full-btn" onclick="openOrgRosterFullscreen()">Open Students Database <span class="tip-bulb inline-tip-bulb" role="button" tabindex="0" onclick="event.stopPropagation(); showFeatureTip('students-roster')" title="Student roster tip">i</span></button>
+      </div>
+
+    </div>
+
+    <!-- RECORDS SECTION -->
+    <div id="inventory-section" class="page hidden">
+      <div id="category-view">
+        <div id="add-category-box" class="payment-box">
+      <h3>Add Collection Category <button class="tip-bulb" onclick="showFeatureTip('records-add')" title="How to add a collection">i</button></h3>
+      <div class="row">
+        <input type="text" id="new-category" placeholder="e.g. Newsette Fee">
+        <input type="number" id="new-category-due" placeholder="Amount per Student" step="0.01">
+      </div>
+      <button class="full-btn" onclick="addCategory()">Add Collection</button>
+        </div>
+
+        <hr class="section-divider">
+
+        <h3>Collections A-Z <button class="tip-bulb" onclick="showFeatureTip('records-list')" title="Collections A-Z tip">i</button></h3>
+        <p class="note" style="margin: -4px 0 10px 0;">💡 Tip: Tap the red circle to change a collection's status to remitted. Tap the collection card to see its details.</p>
+        <div class="inventory-wrapper">
+          <div id="category-list" class="category-scroll"></div>
+          <div id="alpha-index" class="alpha-index"></div>
+        </div>
+      </div>
+
+      <div id="item-view" class="hidden">
+        <div class="item-header">
+          <button onclick="backToCategories()">← Back</button>
+          <h3 id="item-view-title">COLLECTION NAME</h3>
+          <button class="tip-bulb collection-detail-tip" onclick="showFeatureTip('collection-details')" title="Collection details tip">i</button>
+        </div>
+        <div class="item-toolbar">
+          <!-- In INVENTORY/Records tab, inside item-toolbar: -->
+  <button onclick="addAllStudents()">+ <span class="mode-add-all-btn">Add All Year Level</span></button>
+          <button onclick="renameCategory()">Rename</button>
+          <button onclick="exportCategoryCSV()">Export CSV</button>
+        </div>
+        <div id="item-summary" class="item-summary"></div>
+        <div class="collection-status-actions">
+          <button onclick="openQuickPayModal()" class="quick-pay-action class-only-quick-pay">Quick Pay</button>
+        </div>
+        <div class="row">
+          <input type="text" id="item-search" placeholder="Search students..." oninput="renderItemList()" style="flex:1; margin-bottom:0;">
+          <div class="filters-dropdown class-only-filter" id="item-filters-dropdown">
+            <button type="button" class="filters-toggle-btn" onclick="toggleItemFiltersMenu(event)">🔎 Filters</button>
+            <div id="item-filters-menu" class="filters-menu hidden">
+              <label class="filters-menu-label">Status</label>
+              <select id="item-status-filter" onchange="setPaidFilter(this.value)">
+                <option value="all">All Status</option>
+                <option value="paid">Paid</option>
+                <option value="partial">Partial</option>
+                <option value="unpaid">Unpaid</option>
+              </select>
+              <label class="filters-menu-label">Payment Method</label>
+              <select id="item-method-filter" onchange="renderItemList()">
+                <option value="all">All Methods</option>
+                <option value="cash">💵 Cash</option>
+                <option value="gcash">📱 GCash</option>
+              </select>
+              <label class="filters-menu-label">Payment Date</label>
+              <input type="date" id="item-date-filter" onchange="renderItemList()" title="Show students who paid on this date">
+            </div>
+          </div>
+        </div>
+        <div class="inside-box-full">
+          <p class="note">Tap program year level to add a payment or edit</p>
+          <div id="item-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CASHBOOK SECTION (organization-wide income & expense ledger) -->
+    <div id="cashbook-section" class="page hidden">
+
+      <div id="cashbook-main-view">
+
+        <h3>Cashbook Overview <button class="tip-bulb" onclick="showFeatureTip('cashbook-summary')" title="Cashbook overview tip">i</button></h3>
+        <div id="cashbook-summary" class="summary-grid"></div>
+
+        <hr class="section-divider">
+
+        <div class="row">
+          <button onclick="openOpeningBalanceModal()" style="flex:1;">💰 Set Opening Balance <span class="tip-bulb inline-tip-bulb" role="button" tabindex="0" onclick="event.stopPropagation(); showFeatureTip('cashbook-opening')" title="Opening balance tip">i</span></button>
+          <button onclick="showProjectsView()" style="flex:1;">📁 Projects &amp; Events <span class="tip-bulb inline-tip-bulb" role="button" tabindex="0" onclick="event.stopPropagation(); showFeatureTip('projects')" title="Projects and events tip">i</span></button>
+        </div>
+
+
+        <hr class="section-divider">
+        
+
+<!-- =========================================================================
+   COLLAPSIBLE TRANSACTION LOGS ACCORDION PANEL GROUP
+========================================================================= -->
+<div id="transaction-logs-card" class="cf-student-card auto-close-dropdown-scope" style="padding: 0; margin-top: 14px; margin-bottom: 18px; border-radius: var(--radius);">
+  
+  <!-- Main Primary Parent Action Row Toggle Button -->
+  <button type="button" class="cf-big-button" onclick="document.getElementById('transaction-logs-dropdown-content').classList.toggle('hidden')" style="border: none; margin-bottom: 0; width: 100%;">
+    <span style="display: flex; align-items: center;">
+      <span class="cf-btn-icon" style="margin-right: 12px; font-size: 20px;">📜</span>
+      <span style="color: var(--ink); font-weight: 600;">Transaction Logs <span class="tip-bulb inline-tip-bulb" role="button" tabindex="0" onclick="event.stopPropagation(); showFeatureTip('transaction-logs')" title="Transaction logs tip">i</span></span>
+    </span>
+    <span class="cf-btn-arrow" style="color: var(--muted); font-size: 14px; font-family: monospace;">▼</span>
+  </button>
+  
+  <!-- Collapsible Content Wrapper (Houses the sub-feature buttons inside) -->
+  <div id="transaction-logs-dropdown-content" class="hidden auto-close-dropdown-content" style="padding: 14px 16px; background: var(--surface-alt); border-top: 1px solid var(--hairline); border-radius: 0 0 var(--radius) var(--radius); display: flex; flex-direction: column; gap: 10px; width: 100%; box-sizing: border-box;">
+    
+    <!-- Sub Button 1: Income & Expenses -->
+    <button type="button" class="cf-big-button" onclick="openCashbookLog('general')" style="margin-bottom: 0; background: var(--surface); width: 100%;">
+      <span style="display: flex; align-items: center;">
+        <span class="cf-btn-icon" style="margin-right: 12px; font-size: 20px;">📊</span>
+        <span style="color: var(--ink); font-weight: 600;">Income & Expenses</span>
+      </span>
+      <span class="cf-btn-arrow" style="color: var(--muted); font-size: 14px; font-family: monospace;">→</span>
+    </button>
+
+    <!-- Sub Button 2: Year-Level Remittances -->
+    <button type="button" class="cf-big-button" onclick="openCashbookLog('remittance')" style="margin-bottom: 0; background: var(--surface); width: 100%;">
+      <span style="display: flex; align-items: center;">
+        <span class="cf-btn-icon" style="margin-right: 12px; font-size: 20px;">💵</span>
+        <span style="color: var(--ink); font-weight: 600;">Year-Level Remittances</span>
+      </span>
+      <span class="cf-btn-arrow" style="color: var(--muted); font-size: 14px; font-family: monospace;">→</span>
+    </button>
+
+    <!-- Sub Button 3: All Logs -->
+    <button type="button" class="cf-big-button" onclick="openCashbookLog('all')" style="margin-bottom: 0; background: var(--surface); width: 100%;">
+      <span style="display: flex; align-items: center;">
+        <span class="cf-btn-icon" style="margin-right: 12px; font-size: 20px;">📁</span>
+        <span style="color: var(--ink); font-weight: 600;">All Logs</span>
+      </span>
+      <span class="cf-btn-arrow" style="color: var(--muted); font-size: 14px; font-family: monospace;">→</span>
+    </button>
+
+  </div>
+</div>
+
+
+<!-- =========================================================================
+   COMPACT MASTER REPORT ENGINE ACCORDION GROUP
+========================================================================= -->
+<div id="generate-statement-card" class="cf-student-card auto-close-dropdown-scope" style="padding: 0; margin-top: 14px; margin-bottom: 18px; border-radius: var(--radius); width: 100%; box-sizing: border-box;">
+  
+  <!-- Main Primary Parent Action Row Toggle Button -->
+  <button type="button" class="cf-big-button" onclick="document.getElementById('generate-statement-dropdown-content').classList.toggle('hidden')" style="border: none; margin-bottom: 0; width: 100%;">
+    <span style="display: flex; align-items: center;">
+      <span class="cf-btn-icon" style="margin-right: 12px; font-size: 20px;">📜</span>
+      <span style="color: var(--ink); font-weight: 600;">Generate Statement <span class="tip-bulb inline-tip-bulb" role="button" tabindex="0" onclick="event.stopPropagation(); showFeatureTip('statement')" title="Statement tip">i</span></span>
+    </span>
+    <span class="cf-btn-arrow" style="color: var(--muted); font-size: 14px; font-family: monospace;">▼</span>
+  </button>
+  
+  <!-- Collapsible Content Wrapper (Houses both sub-accordion feature boxes inside) -->
+  <div id="generate-statement-dropdown-content" class="hidden auto-close-dropdown-content" style="padding: 14px 16px; background: var(--surface-alt); border-top: 1px solid var(--hairline); border-radius: 0 0 var(--radius) var(--radius); display: flex; flex-direction: column; gap: 12px; width: 100%; box-sizing: border-box;">
+    
+    <!-- SUB-FEATURE 1: Organization Configuration Accordion Panel Box -->
+    <div class="cf-student-card auto-close-dropdown-scope" style="padding: 0; margin-bottom: 0; border-radius: var(--radius); background: var(--surface); width: 100%; box-sizing: border-box;">
+      <button type="button" class="cf-big-button" onclick="document.getElementById('nested-org-info-content').classList.toggle('hidden')" style="border: none; margin-bottom: 0; width: 100%; background: transparent;">
+        <span style="display: flex; align-items: center;">
+          <span class="cf-btn-icon" style="margin-right: 12px; font-size: 20px;">🏢</span>
+          <span style="color: var(--ink); font-weight: 600;">Organization Information Setup</span>
+        </span>
+        <span class="cf-btn-arrow" style="color: var(--muted); font-size: 14px; font-family: monospace;">▼</span>
+      </button>
+      
+      <!-- Sub-Feature 1 Input Folder Container -->
+      <div id="nested-org-info-content" class="hidden auto-close-dropdown-content" style="padding: 16px; background: var(--surface-alt); border-top: 1px solid var(--hairline); border-radius: 0 0 var(--radius) var(--radius);">
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+          <input type="text" id="org-name" placeholder="Organization Name (e.g. ITO - PUP UNISAN)" style="width: 100%; box-sizing: border-box;">
+          
+          <div style="display: flex; gap: 10px;">
+            <input type="text" id="org-treasurer" placeholder="Treasurer Name" style="flex: 1; min-width: 0; box-sizing: border-box;">
+            <input type="text" id="org-president" placeholder="President / Adviser Name" style="flex: 1; min-width: 0; box-sizing: border-box;">
+          </div>
+          
+          <input type="text" id="org-sy" placeholder="School Year" style="width: 100%; box-sizing: border-box;">
+          <button type="button" class="btn-save" onclick="saveOrgSettings()" style="width: 100%; height: 48px; margin-top: 4px;">Save Organization Info</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- SUB-FEATURE 2: Financial Statement Date Picker Panel Box -->
+    <div class="cf-student-card auto-close-dropdown-scope" style="padding: 0; margin-bottom: 0; border-radius: var(--radius); background: var(--surface); width: 100%; box-sizing: border-box;">
+      <button type="button" class="cf-big-button" onclick="document.getElementById('nested-statement-engine-content').classList.toggle('hidden')" style="border: none; margin-bottom: 0; width: 100%; background: transparent;">
+        <span style="display: flex; align-items: center;">
+          <span class="cf-btn-icon" style="margin-right: 12px; font-size: 20px;">📄</span>
+          <span style="color: var(--ink); font-weight: 600;">Financial Statement Generator</span>
+        </span>
+        <span class="cf-btn-arrow" style="color: var(--muted); font-size: 14px; font-family: monospace;">▼</span>
+      </button>
+      
+      <!-- Sub-Feature 2 Input Folder Container -->
+      <div id="nested-statement-engine-content" class="hidden auto-close-dropdown-content" style="padding: 16px; background: var(--surface-alt); border-top: 1px solid var(--hairline); border-radius: 0 0 var(--radius) var(--radius);">
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+          <div style="display: flex; gap: 10px;">
+            <div style="flex: 1;">
+              <label class="note" style="display: block; margin-bottom: 4px; font-weight: 600;">Start Date</label>
+              <input type="date" id="stmt-start" style="width: 100%; box-sizing: border-box; height: 48px;">
+            </div>
+            <div style="flex: 1;">
+              <label class="note" style="display: block; margin-bottom: 4px; font-weight: 600;">End Date</label>
+              <input type="date" id="stmt-end" style="width: 100%; box-sizing: border-box; height: 48px;">
+            </div>
+          </div>
+          
+          <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 6px;">
+            <button type="button" class="btn-save" onclick="generateStatement()" style="width: 100%; height: 48px;">Generate Statement</button>
+            <button type="button" class="btn-cancel" onclick="openStatementFullscreen()" style="width: 100%; height: 48px; background: var(--surface); border: 1.5px solid var(--hairline);">Show Statement Full Screen</button>
+            <!-- 🔴 ADD THIS EXACT LINE RIGHT HERE BELOW THE BUTTONS -->
+<div id="statement-output"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+
+        <hr class="section-divider">
+        
+
+<!-- =========================================================================
+   CASHBOOK TRANSACTION RECORD FORM ROW STACK
+========================================================================= -->
+<div class="cashbook-record-box">
+  <h4 id="txn-form-title">Record Transaction <button class="tip-bulb" onclick="showFeatureTip('transaction')" title="Record transaction tip">i</button></h4>
+  
+  <input type="hidden" id="txn-edit-id" value="">
+  <input type="hidden" id="txn-type" value="income">
+
+  <!-- Transaction Type Toggles Row -->
+  <div class="row" style="margin-bottom: 16px;">
+    <button type="button" id="type-income-btn" class="type-toggle-btn selected-income" onclick="setTxnType('income')">+ Income</button>
+    <button type="button" id="type-expense-btn" class="type-toggle-btn" onclick="setTxnType('expense')">− Expense</button>
+  </div>
+
+  <!-- Isolated container for Date input field -->
+  <div class="row" style="margin-bottom: 12px; width: 100%;">
+    <input type="date" id="txn-date" value="2026-09-12" style="width: 100%; box-sizing: border-box;">
+  </div>
+
+  <!-- Moved Description directly below the Date as a full-width row -->
+  <div class="row" style="margin-bottom: 12px; width: 100%;">
+    <input type="text" id="txn-description" placeholder="Description" style="width: 100%; box-sizing: border-box;">
+  </div>
+
+  <!-- Transaction Numeric Operational Value Input Row -->
+  <div class="row" style="margin-bottom: 12px; width: 100%;">
+    <input type="number" id="txn-amount" step="0.01" placeholder="Amount" style="width: 100%; box-sizing: border-box;">
+  </div>
+
+  <!-- Project linking dropdown row -->
+  <div class="row" style="margin-bottom: 12px; position: relative; width: 100%;">
+    <div class="custom-dropdown" style="width: 100%;">
+      <input type="text" id="txn-project-search" placeholder="Link to Project/Event (optional)" oninput="filterProjectPicker()" onfocus="filterProjectPicker()" style="width: 100%; box-sizing: border-box;">
+      <input type="hidden" id="txn-project-select" value="">
+      <div id="txn-project-dropdown" class="dropdown-content"></div>
+    </div>
+  </div>
+
+  <!-- Extra Details Textarea Box Input Field Row Layout Block -->
+  <div class="row" style="margin-bottom: 16px; width: 100%;">
+    <textarea id="txn-notes" placeholder="Notes (optional)" rows="3" style="width: 100%; height: 80px; padding: 12px; font-size: 15px; border: 1.5px solid var(--hairline); border-radius: var(--radius-sm); resize: none; font-family: inherit; box-sizing: border-box;"></textarea>
+  </div>
+
+  <!-- Interactive Action Confirmation Options Execution Strip Panel Block Button Stack -->
+  <div class="item-actions" style="width: 100%; box-sizing: border-box;">
+    <button type="button" class="btn-save" onclick="saveTransaction()" style="width: 100%; height: 52px;">Save Transaction</button>
+    <button type="button" id="txn-delete-btn" class="btn-delete-item" onclick="deleteCashbookEdit()" style="display: none; height: 52px;">Delete This Transaction</button>
+    <button type="button" id="txn-cancel-btn" class="btn-cancel" onclick="resetTxnForm()" style="display: none; height: 52px;">Cancel Edit</button>
+  </div>
+</div>
+
+        <hr class="section-divider">
+ </div>  <!-- ✅ ADDED: closes #cashbook-main-view -->
+  </div>  <!-- ✅ ADDED: closes #cashbook-section -->
+
+      <div id="projects-view" class="hidden">
+        <div class="item-header">
+          <button onclick="hideProjectsView()">← Back</button>
+          <h3>Projects &amp; Events <button class="tip-bulb" onclick="showFeatureTip('projects')" title="Projects and events tip">i</button></h3>
+          <div></div>
+        </div>
+        <p class="note" style="margin-bottom:14px;">Track a budget per event or project (e.g. Foundation Week, Outreach Program) and see income raised vs. what was actually spent.</p>
+        <div class="row">
+          <input type="text" id="new-project-name" placeholder="Project / Event name">
+          <input type="number" id="new-project-budget" placeholder="Budget (optional)" step="0.01">
+        </div>
+        <button class="full-btn" onclick="addProject()">Add Project</button>
+        <hr class="section-divider">
+        <div id="projects-list"></div>
+      </div>
+
+      <div id="project-detail-view" class="hidden">
+        <div class="item-header">
+          <button onclick="backToProjectsList()">← Back</button>
+          <h3 id="project-detail-name">PROJECT</h3>
+          <div></div>
+        </div>
+        <div id="project-detail-summary" class="summary-grid"></div>
+        <h3>Linked Transactions</h3>
+        <div id="project-detail-txns"></div>
+      </div>
+
+      <!-- CLASS FUND SECTION (Class Mode Only) -->
+      <div id="classfund-section" class="page hidden">
+      <p class="eyebrow" style="text-align:left; margin-bottom:6px;">Weekly Collection</p>
+      <h3>Class Fund Tracker <button class="tip-bulb" onclick="showFeatureTip('classfund-settings')" title="Class Fund setup tip">i</button></h3>
+      <p class="note" style="margin-bottom:16px;">
+        Track weekly class fund collections per student. Set your weekly amount and collection start date, then record payments. 
+        Students must be added in the <b>Students</b> tab first.
+      </p>
+
+      <!-- Settings -->
+      <div class="cf-settings">
+        <div class="row">
+          <input type="number" id="cf-weekly-due" placeholder="Weekly Due (₱)" step="0.01">
+          <input type="date" id="cf-start-date">
+        </div>
+        <button class="full-btn" onclick="saveClassFundSettings()" style="margin-top:0; margin-bottom:4px;">Save Settings</button>
+        <p class="note" id="cf-week-info" style="text-align:center; margin-top:8px; font-weight:600;"></p>
+      </div>
+
+      <!-- Summary Cards -->
+      <div id="classfund-summary" class="summary-grid"></div>
+
+      <!-- Missed Payment Alert -->
+      <div id="cf-missed-alert"></div>
+
+      <!-- Toolbar -->
+      <div class="row" style="margin-bottom:16px;">
+        <button class="full-btn" onclick="addAllToClassFund()" style="background: linear-gradient(135deg, var(--accent-2), var(--warning)); margin-top:0;">+ Add All Students</button>
+        <button class="full-btn btn-cancel" onclick="resetClassFundData()" style="margin-top:0;">Reset Class Fund</button>
+        <button class="full-btn" onclick="exportClassFundWeeklyCSV()" style="margin-top:0; background: linear-gradient(135deg, var(--info), var(--accent));">📄 Export Weekly CSV</button>
+      </div>
+
+
+<!-- =========================================================================
+     FIXED DASHBOARD WORKSPACE GRID (EXCLUDES RECORD EXPENSE BOX)
+     ========================================================================= -->
+<div class="summary-grid" style="grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-bottom: 24px;">
+  
+  <!-- Left Side: Student Collections Card Row (Original Styling Layout) -->
+  <button type="button" class="cf-big-button" onclick="openCfStudentsOverlay()" style="margin-bottom: 0; width: 100%;">
+    <span style="display: flex; align-items: center; gap: 10px;">
+      <span class="cf-btn-icon">👥</span>
+      <span>Student Collections <span class="tip-bulb inline-tip-bulb" role="button" tabindex="0" onclick="event.stopPropagation(); showFeatureTip('student-collections')" title="Student collections tip">i</span></span>
+    </span>
+    <span class="cf-btn-arrow">→</span>
+  </button>
+
+  <!-- Right Side: Class Fund Ledger Card Row (Original Styling Layout) -->
+  <button type="button" class="cf-big-button" onclick="openCfLedgerOverlay()" style="margin-bottom: 0; width: 100%;">
+    <span style="display: flex; align-items: center; gap: 10px;">
+      <span class="cf-btn-icon">📒</span>
+      <span>Class Fund Ledger <span class="tip-bulb inline-tip-bulb" role="button" tabindex="0" onclick="event.stopPropagation(); showFeatureTip('classfund-ledger')" title="Class Fund ledger tip">i</span></span>
+    </span>
+    <span class="cf-btn-arrow">→</span>
+  </button>
+
+</div>
+
+
+
+      <hr class="section-divider">
+
+      <!-- Expense Card — NOW PROPERLY CLOSED -->
+      <div class="cf-expense-card">
+        <h3 style="margin-bottom:6px;">Record Expense</h3>
+        <p class="note" style="margin-bottom:14px;">Log what the class fund was spent on (e.g. supplies, printing, food). This deducts from your net balance.</p>
+        
+        <div class="cf-expense-row">
+          <input type="date" id="cf-expense-date">
+          <input type="text" id="cf-expense-desc" placeholder="What was it spent on?">
+        </div>
+        <div class="cf-expense-row">
+          <input type="number" id="cf-expense-amount" placeholder="Amount" step="0.01">
+          <input type="text" id="cf-expense-note" placeholder="Note (optional)">
+        </div>
+        <button class="full-btn" onclick="recordClassFundExpense()" style="margin-top:4px; background: linear-gradient(135deg, var(--danger), #8f332d);">Record Expense</button>
+      </div>
+
+      <div id="classfund-list" class="hidden"></div>
+
+      <div id="cf-txn-log" class="hidden"></div>
+
+      <hr class="section-divider">
+
+    </div>
+
+
+
+
+    <!-- TRANSFER FUNDS MODAL -->
+  <div id="transfer-modal" class="activation-overlay hidden">
+    <div class="activation-card" style="max-width: 420px;">
+      <h2 style="font-size:20px;">Transfer Funds</h2>
+      <p class="note" style="margin-bottom:15px;">Move money out of <b id="transfer-from-name"></b> into another collection.</p>
+      <select id="transfer-to-select" style="margin-bottom:12px;"></select>
+      <input type="number" id="transfer-amount" placeholder="Amount to transfer" step="0.01">
+      <input type="date" id="transfer-date">
+      <input type="text" id="transfer-note" placeholder="Note (e.g. Remittance completion)">
+      <button class="full-btn" onclick="confirmTransfer()">Transfer</button>
+      <button class="full-btn btn-cancel" onclick="closeTransferModal()" style="margin-top:10px;">Cancel</button>
+      <p class="note" id="transfer-error" style="color:#B3423B; margin-top:10px;"></p>
+    </div>
+  </div>
+
+  <div id="cashbook-log-overlay" class="fullscreen-overlay hidden">
+    <div class="fullscreen-panel">
+      <div class="fullscreen-header">
+        <button onclick="closeCashbookLog()">← Close</button>
+        <h3 id="cashbook-log-title">Transaction Logs</h3>
+        <button class="mini-btn" onclick="exportCashbookLog()">Export CSV</button>
+      </div>
+      <div class="row">
+        <input type="text" id="cashbook-log-search" placeholder="Search this log..." oninput="renderCashbookLog()">
+      </div>
+      <div id="cashbook-log-list"></div>
+    </div>
+  </div>
+
+  <div id="cashbook-edit-modal" class="activation-overlay hidden">
+    <div class="activation-card cashbook-edit-card">
+      <h2 style="font-size:20px;">Edit Transaction</h2>
+      <input type="date" id="cashbook-edit-date">
+      <select id="cashbook-edit-type"><option value="income">Income</option><option value="expense">Expense</option></select>
+      <input type="text" id="cashbook-edit-category" placeholder="Category">
+      <input type="text" id="cashbook-edit-description" placeholder="Description">
+      <input type="number" id="cashbook-edit-amount" placeholder="Amount" step="0.01">
+      <textarea id="cashbook-edit-notes" placeholder="Notes (optional)" style="height:80px;"></textarea>
+      <button class="full-btn" onclick="saveCashbookEdit()">Save Changes</button>
+      <button class="full-btn danger-btn" onclick="deleteCashbookEdit()">Delete Transaction</button>
+      <button class="full-btn btn-cancel" onclick="closeCashbookEdit()">Cancel</button>
+    </div>
+  </div>
+
+  <div id="backup-fullscreen-overlay" class="fullscreen-overlay hidden">
+    <div class="fullscreen-panel">
+      <div class="fullscreen-header">
+        <button onclick="closeBackupFullscreen()">← Close</button>
+        <h3>Backup Snapshot</h3>
+        <div></div>
+      </div>
+      <div id="backup-fullscreen-content"></div>
+    </div>
+  </div>
+
+  <div id="statement-fullscreen-overlay" class="fullscreen-overlay hidden">
+    <div class="fullscreen-panel statement-fullscreen-panel">
+      <div class="fullscreen-header">
+        <button onclick="closeStatementFullscreen()">← Close</button>
+        <h3>Statement of Receipts and Disbursements</h3>
+        <div></div>
+      </div>
+      <div id="statement-fullscreen-content"></div>
+    </div>
+  </div>
+
+
+
+<!-- SUMMARY TAB (migrated from EVE's old "Data" button) -->
+<div id="eve-summary-tab-section" class="page hidden">
+  <hr class="header-rule">
+  <h3>Summary Dashboard <button class="tip-bulb" onclick="showFeatureTip('summary')" title="Summary tip">i</button></h3>
+  <div id="eve-summary-view"></div>
+</div>
+
+<!-- 📁 LOCATE THIS CONTAINER WRAPPER IN YOUR HTML AND UPDATE ITS INTERIOR -->
+<div id="summary-section" class="page hidden">
+ 
+  <hr class="header-rule">
+
+
+  <div class="section-divider"></div>
+
+  <!-- 2. Permanent Data Management & Backup Options Block -->
+  <div class="cashbook-record-box" style="margin-top: 20px;">
+    <h3>Data Management &amp; Backup Options <button class="tip-bulb" onclick="showFeatureTip('backup')" title="Backup tip">i</button></h3>
+    <p class="note" id="backup-status">Checking backup states...</p>
+    
+    <button type="button" onclick="exportBackup()">💾 Export Backup (JSON)</button>
+    
+    <label class="file-label" style="margin-top: 12px; display: block;">
+      📥 Import Backup (JSON)
+      <input type="file" id="import-file" style="display:none;" onchange="importBackup(event)">
+    </label>
+    
+    <button type="button" class="danger-btn" onclick="resetAllData()" style="margin-top: 12px;">⚠ Reset All Data</button>
+  </div>
+</div>
+
+        
+  <nav class="nav-menu">
+    <button class="nav-item" id="nav-students" onclick="switchTab('database-section', this)">
+      <span>🎓</span>Year Level
+    </button>
+    <button class="nav-item" id="nav-inventory" onclick="switchTab('inventory-section', this)">
+      <span>📁</span>Records
+    </button>
+      <button class="nav-item hidden" id="nav-classfund" onclick="switchTab('classfund-section', this)">
+      <span>💰</span>Class Fund
+    </button>
+    <button class="nav-item" id="nav-cashbook" onclick="switchTab('cashbook-section', this)">
+      <span>💵</span>Cashbook
+    </button>
+    <button class="nav-item" id="nav-summary-tab" onclick="switchTab('eve-summary-tab-section', this)">
+      <span>📊</span>Summary
+    </button>
+    <button class="nav-item" id="nav-summary" onclick="switchTab('summary-section', this)">
+      <span>💾</span>Backup
+    </button>
+    
+  </nav>
+
+  </div>
+
+    <!-- EVE Bot Assistant -->
+    <div class="eve-bot" id="eveBot">
+      <button id="eve-idle-toggle" class="eve-idle-toggle running" title="Idle tips running — tap to stop">●</button>
+      <span class="eve-hint">Tap to silence ME</span>
+      <div class="speech-bubble" id="speechBubble">
+        <div class="eve-msg" id="eveMsg">Oh hi! I'm just finding the bug</div>
+        <div class="eve-actions" id="eveActions"></div>
+      </div>
+      <div class="eve-scaler">
+        <div class="eve-container">
+          <div class="eve-head" id="eveHead">
+            <div class="eve-visor">
+            <div class="eve-zipper" id="eveZipper"></div>
+              <div class="eye-wrapper">
+                <div class="eve-eye left-eye" id="leftEye"></div>
+              </div>
+              <div class="eye-wrapper">
+                <div class="eve-eye right-eye" id="rightEye"></div>
+              </div>
+            </div>
+          </div>
+          <div class="eve-shadow"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- EDIT HISTORY ENTRY MODAL -->
+  <div id="edit-history-modal" class="activation-overlay hidden">
+    <div class="activation-card" style="max-width: 420px;">
+      <h2 style="font-size:20px;">Edit Payment</h2>
+      <p class="note" style="margin-bottom:15px;">Update payment details below.</p>
+      <input type="date" id="edit-hist-date">
+      <input type="number" id="edit-hist-amount" placeholder="Amount" step="0.01">
+      <input type="text" id="edit-hist-note" placeholder="Note (optional)">
+      <button class="full-btn" onclick="confirmEditHistory()">Save Changes</button>
+      <button class="full-btn btn-cancel" onclick="closeEditHistoryModal()" style="margin-top:10px;">Cancel</button>
+    </div>
+  </div>
+
+  <!-- CLASS FUND LEDGER TRANSACTION — FULL SCREEN EDIT -->
+  <div id="cf-ledger-edit-modal" class="fullscreen-overlay hidden">
+    <div class="fullscreen-panel">
+      <div class="fullscreen-header">
+        <button onclick="closeCfLedgerEdit()">← Close</button>
+        <h3 style="margin-bottom:0; padding-bottom:0;">Edit Transaction</h3>
+        <div></div>
+      </div>
+
+      <p class="note" id="cf-ledger-edit-type" style="text-align:center; font-weight:700; margin-bottom:22px; text-transform:uppercase; letter-spacing:1px; font-size:13px;"></p>
+
+      <label class="note" id="cf-ledger-edit-desc-label" style="display:block; margin-bottom:6px; font-weight:600; color:var(--ink);">Description</label>
+      <input type="text" id="cf-ledger-edit-desc" placeholder="Description" style="margin-bottom:16px;">
+
+      <label class="note" style="display:block; margin-bottom:6px; font-weight:600; color:var(--ink);">Date</label>
+      <input type="date" id="cf-ledger-edit-date" style="margin-bottom:16px;">
+
+      <label class="note" style="display:block; margin-bottom:6px; font-weight:600; color:var(--ink);">Amount</label>
+      <input type="number" id="cf-ledger-edit-amount" step="0.01" placeholder="Amount" style="margin-bottom:16px;">
+
+      <label class="note" style="display:block; margin-bottom:6px; font-weight:600; color:var(--ink);">Note</label>
+      <input type="text" id="cf-ledger-edit-note" placeholder="Note (optional)" style="margin-bottom:16px;">
+
+      <button class="full-btn" onclick="saveCfLedgerEdit()" style="margin-top:12px;">Save Changes</button>
+      <button class="full-btn danger-btn" onclick="deleteCfLedgerEdit()">Delete Transaction</button>
+      <button class="full-btn btn-cancel" onclick="closeCfLedgerEdit()">Cancel</button>
+    </div>
+  </div>
+
+<!-- 1. HTML MARKUP LAYER -->
+<div id="cf-payment-modal" class="activation-overlay hidden">
+  <div class="activation-card" style="max-width:460px; width:100%;">
+    <div class="fullscreen-header">
+      <button type="button" onclick="closeClassFundPaymentModal()">← Close</button>
+      <h3 style="margin-bottom:0; padding-bottom:0;">Add Class Fund Payment</h3>
+      <div></div>
+    </div>
+    
+    <p class="note" id="cf-payment-student" style="text-align:center; font-weight:700; margin-bottom:18px; color: var(--accent);"></p>
+    
+    <label class="note" style="display:block; margin-bottom:6px;">Payment Date</label>
+    <input type="date" id="cf-payment-date" style="margin-bottom:14px; width:100%; box-sizing:border-box;">
+    
+    <label class="note" style="display:block; margin-bottom:6px;">Amount</label>
+    <input type="number" id="cf-payment-amount" placeholder="Amount (₱)" step="0.01" style="margin-bottom:14px; width:100%; box-sizing:border-box;">
+    
+    <label class="note" style="display:block; margin-bottom:6px;">Note</label>
+    <input type="text" id="cf-payment-note" placeholder="Note (optional)" style="margin-bottom:18px; width:100%; box-sizing:border-box;">
+    
+    <!-- Action execution buttons mapped to unified functional controller logic -->
+    <button type="button" class="full-btn" onclick="submitClassFundPaymentForm()">Record Payment</button>
+    <button type="button" class="full-btn btn-cancel" onclick="closeClassFundPaymentModal()" style="margin-top:10px;">Cancel</button>
+  </div>
+</div>
+
+  <!-- COLLECTION ITEM EDIT MODAL -->
+  <div id="collection-edit-modal" class="activation-overlay hidden">
+<!-- Inside your #collection-edit-modal container -->
+<div class="modal-content collection-edit-card">
+  <div class="fullscreen-header">
+    <button type="button" class="btn-cancel" onclick="closeCollectionEdit()">← Close</button>
+    <h3 id="collection-edit-title">Edit Record</h3>
+  </div>
+
+  <!-- Student / Year Level Display Header -->
+  <h2 id="collection-edit-student-name" style="text-align: center; margin: 12px 0;">-</h2>
+
+<div class="due-input-group">
+  <label for="collection-edit-due">Amount Due Per Student:</label>
+  <div class="inline-input-wrapper">
+    <!-- Amount Due Input Field -->
+    <input 
+      type="number" 
+      id="collection-edit-due" 
+      step="0.01" 
+      min="0" 
+      placeholder="0.00"
+    >
+    <!-- New Checkmark Button (Strictly saves amount due only) -->
+    <button 
+      type="button" 
+      class="btn-save-check" 
+      onclick="saveCollectionEdit(event)" 
+      title="Save Amount Due"
+    >
+      ✓
+    </button>
+  </div>
+</div>
+
+
+  <div class="section-divider"></div>
+
+  <!-- ADD PAYMENT SECTION -->
+  <div class="form-box">
+    <h4 id="collection-edit-pay-label" style="margin-bottom: 10px;">Add Payment</h4>
+    <div class="row" style="margin-bottom: 10px;">
+      <input type="number" id="collection-edit-pay" placeholder="Payment amount" style="flex: 1;">
+      <input type="date" id="collection-edit-date" style="flex: 1;">
+    </div>
+    <div class="row" style="margin-bottom: 12px;">
+      <input type="text" id="collection-edit-note" placeholder="Payment note (optional)" style="flex: 1;">
+      <div id="collection-edit-method-toggle" class="payment-method-toggle">
+        <button type="button" class="method-btn active" data-method="cash" onclick="setCollectionEditMethod('cash')">💵 Cash</button>
+        <button type="button" class="method-btn" data-method="gcash" onclick="setCollectionEditMethod('gcash')">📱 GCash</button>
+      </div>
+    </div>
+    <button type="button" id="collection-quick-pay-btn" onclick="collectionQuickPay()" style="width: 100%; margin-bottom: 16px;">Add Payment</button>
+  </div>
+
+  <!-- FLOATING PAYMENT HISTORY DROPDOWN -->
+  <div class="form-box auto-close-dropdown-scope" style="margin-top: 14px; position: relative;">
+    <button type="button" class="cf-big-button" onclick="const historyBox = document.getElementById('collection-edit-history-drawer'); historyBox.classList.toggle('hidden');" style="width: 100%; text-align: left; display: flex; justify-content: space-between; align-items: center; background: #fafafa; border: 1px solid var(--hairline); color: var(--ink);">
+      <span id="collection-history-header"><b>Payment History</b></span>
+      <span class="cf-btn-arrow">▼</span>
+    </button>
+
+    <!-- Floating popover: overlays the content below instead of pushing it down -->
+    <div id="collection-edit-history-drawer" class="hidden auto-close-dropdown-content floating-dropdown-panel">
+      <div id="collection-edit-history" class="history-box"></div>
+    </div>
+  </div>
+
+  <hr class="section-divider">
+
+  <div id="collection-edit-roster-box" class="roster-amount-box" style="border: 1px solid var(--hairline-strong, rgba(0,0,0,0.12)) !important; border-radius: 8px !important; padding: 14px !important; background: var(--surface-alt, #faf8f5) !important; margin-top: 14px !important; box-sizing: border-box !important;">
+
+    <p style="margin: 0 0 12px 0 !important; font-size: 12.5px !important; color: var(--muted, #666666) !important; line-height: 1.4 !important; text-align: left !important;">
+      💡 <b>Student Management:</b> Use this section to add students and to set their remittance status.
+    </p>
+
+    <!-- Buttons grouped horizontally side-by-side with wrapping auto-clearances -->
+    <div style="display: flex !important; gap: 8px !important; width: 100% !important; margin-bottom: 12px !important; box-sizing: border-box !important;">
+
+      <!-- Fixed Add (All) Students Button -->
+      <button type="button" onclick="openRecordRosterPicker()" style="flex: 1 !important; min-width: 0 !important; margin: 0 !important; background: #ffffff !important; color: var(--ink, #333333) !important; border: 1px solid var(--hairline-strong, rgba(0,0,0,0.18)) !important; border-radius: 6px !important; padding: 10px 4px !important; font-size: 13px !important; font-weight: 600 !important; cursor: pointer !important; box-shadow: var(--shadow-sm) !important; display: inline-flex !important; align-items: center !important; justify-content: center !important; text-align: center !important; min-height: 42px !important; line-height: 1.2 !important; white-space: normal !important; word-break: break-word !important;">
+        + Add (All) Students
+      </button>
+
+      <!-- Fixed Open Student Bucket Button -->
+      <button type="button" onclick="openRecordRosterBucket()" style="flex: 1 !important; min-width: 0 !important; margin: 0 !important; background: #ffffff !important; color: var(--ink, #333333) !important; border: 1px solid var(--hairline-strong, rgba(0,0,0,0.18)) !important; border-radius: 6px !important; padding: 10px 4px !important; font-size: 13px !important; font-weight: 600 !important; cursor: pointer !important; box-shadow: var(--shadow-sm) !important; display: inline-flex !important; align-items: center !important; justify-content: center !important; text-align: center !important; min-height: 42px !important; line-height: 1.2 !important; white-space: normal !important; word-break: break-word !important;">
+        Open Student Bucket
+      </button>
+
+    </div>
+
+    <!-- Single dynamic paid / unpaid / total status indicator (no more duplicate IDs) -->
+    <div id="record-roster-paid-indicator" class="note" style="margin-top: 12px !important; display: flex !important; justify-content: center !important; align-items: center !important; background: var(--surface, #ffffff) !important; padding: 8px !important; border-radius: 6px !important; border: 1px solid var(--hairline, rgba(0,0,0,0.08)) !important; text-align: center !important; font-size: 12px !important; font-weight: 600 !important;">
+      <!-- JavaScript will dynamically fill this space -->
+    </div>
+  </div>
+
+</div>
+  </div>
+
+  <div id="record-roster-picker" class="activation-overlay hidden">
+    <div class="activation-card" style="max-width:520px;">
+      <h2 style="font-size:20px;">Add Students</h2>
+      <p class="note" id="record-roster-picker-title"></p>
+      <input type="text" id="record-roster-picker-search" placeholder="Search students..." oninput="renderRecordRosterPicker()">
+      <div class="row" style="gap:8px; margin-top:10px;">
+        <button type="button" onclick="selectAllRecordRosterPicker()" style="flex:1;">Select All</button>
+        <button type="button" onclick="deselectAllRecordRosterPicker()" style="flex:1; background:var(--surface); color:var(--ink); border:1.5px solid var(--hairline);">Deselect All</button>
+      </div>
+      <p id="record-roster-picker-status" class="note" style="text-align:center; margin:8px 0 0;"></p>
+      <div id="record-roster-picker-list" style="max-height:45vh; overflow-y:auto; margin-top:12px;"></div>
+      <button class="full-btn" onclick="confirmRecordRosterPicker()">Add Selected</button>
+      <button class="full-btn btn-cancel" onclick="closeRecordRosterPicker()">Cancel</button>
+    </div>
+  </div>
+
+  <div id="record-roster-overlay" class="fullscreen-overlay hidden">
+    <div class="fullscreen-panel">
+      <div class="fullscreen-header">
+        <button onclick="closeRecordRosterBucket()">← Close</button>
+        <h3 id="record-roster-title">Student Bucket</h3>
+        <div></div>
+      </div>
+      <div class="row">
+        <input type="text" id="record-roster-search" placeholder="Search students..." oninput="renderRecordRosterBucket()">
+        <select id="record-roster-status-filter" onchange="renderRecordRosterBucket()">
+          <option value="all">All</option><option value="paid">Paid</option><option value="unpaid">Unpaid</option>
+        </select>
+      </div>
+      <p id="record-roster-paid-indicator-full" class="note"></p>
+      <div id="record-roster-list"></div>
+    </div>
+  </div>
+
+  <div id="org-roster-fullscreen" class="fullscreen-overlay hidden">
+    <div class="fullscreen-panel">
+      <div class="fullscreen-header">
+        <button onclick="closeOrgRosterFullscreen()">← Close</button>
+        <h3 id="org-roster-title">Students Database <span class="tip-bulb inline-tip-bulb" role="button" tabindex="0" onclick="event.stopPropagation(); showFeatureTip('students-roster')" title="Student roster tip">i</span></h3>
+        <div></div>
+      </div>
+      <div class="row">
+        <input type="text" id="org-roster-search" placeholder="Search student name..." oninput="renderOrgRosterFullscreen()">
+      </div>
+      <div class="roster-bulk-box">
+        <input type="text" id="org-roster-bulk-input" placeholder="Type all student names separated by commas">
+        <button class="full-btn" onclick="addOrgRosterBulk()">Add All Names</button>
+      </div>
+      <div id="org-roster-fullscreen-list"></div>
+    </div>
+  </div>
+
+  <!-- CLASS FUND STUDENTS FULLSCREEN -->
+  <div id="cf-students-overlay" class="fullscreen-overlay hidden">
+    <div class="fullscreen-panel">
+      <div class="fullscreen-header">
+        <button onclick="closeCfStudentsOverlay()">← Close</button>
+        <h3 style="margin-bottom:0; padding-bottom:0;">Student Collections</h3>
+        <div></div>
+      </div>
+      <div class="row">
+        <input type="text" id="cf-overlay-search" placeholder="Search student..." oninput="renderCfOverlayList()" style="margin-bottom:0;">
+      </div>
+      <div id="cf-overlay-list"></div>
+    </div>
+  </div>
+
+  <!-- CLASS FUND LEDGER FULLSCREEN -->
+  <div id="cf-ledger-overlay" class="fullscreen-overlay hidden">
+    <div class="fullscreen-panel">
+      <div class="fullscreen-header">
+        <button onclick="closeCfLedgerOverlay()">← Close</button>
+        <h3 style="margin-bottom:0; padding-bottom:0;">Class Fund Ledger</h3>
+        <div></div>
+      </div>
+      <div class="row">
+        <select id="cf-ledger-filter" onchange="renderCfLedgerOverlay()" style="margin-bottom:12px;">
+          <option value="all">All Transactions</option>
+          <option value="income">Income Only</option>
+          <option value="expense">Expense Only</option>
+        </select>
+      </div>
+      <div id="cf-ledger-overlay-list"></div>
+    </div>
+  </div>
+
+  <!-- EVE HEX INVENTORY OVERLAY -->
+  <div id="eve-inventory-overlay" class="fullscreen-overlay hidden" style="z-index:998; background:rgba(18,26,22,0.92); backdrop-filter:blur(4px); overflow:hidden !important;">
+    
+    <div class="fullscreen-panel eve-inventory-panel">
+      <div class="fullscreen-header" style="margin-bottom:20px; border-bottom:1.5px dashed var(--hairline); padding-bottom:14px; display:flex; justify-content:space-between; align-items:center;">
+        <button onclick="closeEveInventory()" style="width:auto; height:auto; padding:10px 18px; background:var(--surface); color:var(--ink); border:1.5px solid var(--hairline); box-shadow:var(--shadow-sm); border-radius:var(--radius-sm); font-size:13px;">← Close</button>
+        <h3 style="margin-bottom:0; padding-bottom:0;">EVE Companion</h3>
+        <div></div>
+      </div>
+
+      <div id="eve-inventory-content">
+        <div class="eve-coming-soon">
+          <div class="eve-coming-soon-icon">🤖</div>
+          <p class="eve-coming-soon-text">Chatbot coming soon</p>
+        </div>
+      </div>
+      
+
+      <!-- Add inside the relevant section in index.html -->
+
+  <div id="eve-summary-detail-overlay" class="fullscreen-overlay hidden" style="z-index:1005; background:rgba(18,26,22,0.96); backdrop-filter:blur(8px);">
+    <div class="fullscreen-panel" style="max-width:760px; width:100%; padding:20px 16px 90px;">
+      <div class="fullscreen-header">
+        <button onclick="closeEveSummaryDetail()">← Back</button>
+        <h3 id="eve-summary-detail-title">Overview Detail</h3>
+        <div></div>
+      </div>
+      <div id="eve-summary-detail-content"></div>
+    </div>
+  </div>
+
+  <!-- Student Bucket Modal -->
+  <div id="student-bucket-modal" class="activation-overlay hidden">
+    <div class="activation-card" style="max-width: 600px;">
+      <div class="item-header">
+        <button onclick="closeStudentBucket()">← Close</button>
+        <h3>Student Bucket</h3>
+      </div>
+      <div class="row" style="margin-bottom:10px;">
+        <input type="text" id="student-bucket-search" placeholder="Search students..." oninput="renderStudentBucket()">
+        <button onclick="filterStudentBucket()" style="margin-left:8px;">Filter</button>
+      </div>
+      <div id="student-bucket-list" style="max-height:50vh; overflow-y:auto;"></div>
+      <div style="margin-top:10px; display:flex; justify-content:space-between; align-items:center;">
+        <button onclick="addStudentsFromBucket()">Add Selected Students</button>
+        <button onclick="addAllStudentsBucket()">Add All Students</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Close EVE inventory panel and overlay before opening independent utility overlays. -->
+  </div>
+</div>
+
+  <!-- =========================================================================
+     EVE CALCULATOR DEDICATED FULL-SCREEN OVERLAY
+     ========================================================================= -->
+<div id="eve-calc-overlay" class="fullscreen-overlay hidden">
+  <div class="fullscreen-panel calc-body">
+    <div class="fullscreen-header">
+      <button type="button" onclick="closeEveCalcModal()">← Back</button>
+      
+      <div></div>
+    </div>
+
+    <!-- Live Calculator Interface Display and Keypad Layout Row Grid -->
+    <div class="calc-display" id="calc-display">0</div>
+    <div class="calc-keys">
+      <button type="button" onclick="calcClear()">C</button>
+      <button type="button" onclick="calcInput('/')">÷</button>
+      <button type="button" onclick="calcInput('*')">×</button>
+      <button type="button" onclick="calcBack()">⌫</button>
+
+      <button type="button" onclick="calcInput('7')">7</button>
+      <button type="button" onclick="calcInput('8')">8</button>
+      <button type="button" onclick="calcInput('9')">9</button>
+      <button type="button" onclick="calcInput('-')">−</button>
+
+      <button type="button" onclick="calcInput('4')">4</button>
+      <button type="button" onclick="calcInput('5')">5</button>
+      <button type="button" onclick="calcInput('6')">6</button>
+      <button type="button" onclick="calcInput('+')">+</button>
+
+      <button type="button" onclick="calcInput('1')">1</button>
+      <button type="button" onclick="calcInput('2')">2</button>
+      <button type="button" onclick="calcInput('3')">3</button>
+      <button type="button" class="calc-eq" onclick="calcEqual()">=</button>
+
+      <button type="button" style="grid-column: span 2;" onclick="calcInput('0')">0</button>
+      <button type="button" onclick="calcInput('.')">.</button>
+    </div>
+  </div>
+</div>
+
+<!-- =========================================================================
+     EVE NOTEPAD DEDICATED FULL-SCREEN OVERLAY
+     ========================================================================= -->
+<div id="eve-notes-overlay" class="fullscreen-overlay hidden">
+  <div class="fullscreen-panel">
+    <div class="fullscreen-header">
+      <button type="button" onclick="closeEveNotesModal()">← Back</button>
+  
+      <button type="button" id="notes-plus-btn" onclick="createNewNoteFlow()" style="background:var(--accent-2); border-color:transparent;">+ New Note</button>
+    </div>
+
+    <!-- Notes Folder List Panel View Container Box -->
+    <div id="notes-folder-list"></div>
+
+    <!-- Integrated Note Text Editor Form Layer Panel (Hidden Initially) -->
+    <div id="notes-editor" class="hidden" style="display: flex; flex-direction: column; gap: 14px;">
+      <div>
+        <label class="note" style="display:block; margin-bottom:6px; font-weight:600;">Title</label>
+        <input type="text" id="note-editor-title" placeholder="Untitled">
+      </div>
+      <div>
+        <label class="note" style="display:block; margin-bottom:6px; font-weight:600;">Content</label>
+        <textarea id="note-editor-body" placeholder="Type your notes here..." style="min-height: 220px; resize: vertical;"></textarea>
+      </div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px;">
+        <button type="button" onclick="saveCurrentNote()" style="background:var(--success);">Save Note</button>
+        <button type="button" onclick="backToNoteList()" class="btn-cancel">Discard Changes</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+
+  <script>
+    (() => {
+      const CALC_KEY = 'treasurer_calculator_expression';
+      let calcExpression = '';
+      let justCalculated = false;
+
+      const byId = id => document.getElementById(id);
+      const calcOverlay = () => byId('eve-calc-overlay');
+      const notesOverlay = () => byId('eve-notes-overlay');
+      const calcDisplays = () => document.querySelectorAll('#calc-display');
+      const setCalcDisplay = value => calcDisplays().forEach(el => { el.textContent = value || '0'; });
+
+      window.openCalcModal = () => {
+        calcOverlay()?.classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+        setCalcDisplay(calcExpression);
+      };
+      window.closeCalcModal = window.closeEveCalcModal = () => {
+        calcOverlay()?.classList.add('hidden');
+        document.body.style.overflow = '';
+      };
+      window.calcClear = () => { calcExpression = ''; justCalculated = false; setCalcDisplay('0'); };
+      window.calcBack = () => { calcExpression = calcExpression.slice(0, -1); setCalcDisplay(calcExpression); };
+      window.calcInput = value => {
+        if (justCalculated && /[0-9.]/.test(value)) calcExpression = '';
+        justCalculated = false;
+        const last = calcExpression.slice(-1);
+        if (/[+*/-]/.test(value) && /[+*/-]/.test(last)) calcExpression = calcExpression.slice(0, -1);
+        if (value === '.' && (calcExpression.match(/\d*\.\d*$/)?.[0] || '').includes('.')) return;
+        calcExpression += value; setCalcDisplay(calcExpression);
+      };
+      window.calcEqual = () => {
+        if (!calcExpression || !/^[0-9+*/.()\-\s]+$/.test(calcExpression)) return setCalcDisplay('Error');
+        try {
+          const result = Function('"use strict"; return (' + calcExpression + ')')();
+          if (!Number.isFinite(result)) throw new Error('invalid');
+          calcExpression = String(Math.round((result + Number.EPSILON) * 1e12) / 1e12);
+          justCalculated = true; setCalcDisplay(calcExpression);
+        } catch { calcExpression = ''; setCalcDisplay('Error'); }
+      };
+
+      const NOTES_KEY = 'treasurer_notes';
+      const getNotes = () => { try { return JSON.parse(localStorage.getItem(NOTES_KEY) || '[]'); } catch { return []; } };
+      const saveNotes = notes => localStorage.setItem(NOTES_KEY, JSON.stringify(notes));
+      let editingNoteId = null;
+      window.openNotesModal = () => { notesOverlay()?.classList.remove('hidden'); document.body.style.overflow = 'hidden'; renderNotes(); };
+      window.closeNotesModal = window.closeEveNotesModal = () => { notesOverlay()?.classList.add('hidden'); document.body.style.overflow = ''; };
+      window.createNewNoteFlow = () => {
+        editingNoteId = null;
+        byId('note-editor-title').value = '';
+        byId('note-editor-body').value = '';
+        byId('notes-folder-list').classList.add('hidden');
+        byId('notes-editor').classList.remove('hidden');
+      };
+      window.backToNoteList = () => { byId('notes-editor').classList.add('hidden'); byId('notes-folder-list').classList.remove('hidden'); renderNotes(); };
+      window.saveCurrentNote = () => {
+        const title = byId('note-editor-title').value.trim() || 'Untitled note';
+        const body = byId('note-editor-body').value.trim();
+        const notes = getNotes();
+        if (editingNoteId) { const note = notes.find(n => n.id === editingNoteId); if (note) Object.assign(note, { title, body, updatedAt: Date.now() }); }
+        else notes.unshift({ id: Date.now().toString(36), title, body, updatedAt: Date.now() });
+        saveNotes(notes); backToNoteList();
+      };
+      window.editNote = id => { const n = getNotes().find(note => note.id === id); if (!n) return; editingNoteId = id; byId('note-editor-title').value = n.title; byId('note-editor-body').value = n.body; byId('notes-folder-list').classList.add('hidden'); byId('notes-editor').classList.remove('hidden'); };
+      window.deleteNote = id => { saveNotes(getNotes().filter(n => n.id !== id)); renderNotes(); };
+      function renderNotes() {
+        const list = byId('notes-folder-list'); if (!list) return;
+        const notes = getNotes();
+        list.innerHTML = notes.length ? notes.map(n => `<article class="note-card"><div class="note-card-content" onclick="editNote('${n.id}')"><div class="note-card-title">${escapeHtml(n.title)}</div><div class="note-card-preview">${escapeHtml(n.body || 'No content yet')}</div></div><button class="note-delete" onclick="deleteNote('${n.id}')">Delete</button></article>`).join('') : '<p class="note" style="text-align:center; padding:32px 10px;">No notes yet. Tap “+ New Note” to create one.</p>';
+      }
+      function escapeHtml(value) { return String(value).replace(/[&<>'"]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#39;', '"':'&quot;' }[c])); }
+      document.addEventListener('keydown', e => { if (e.key === 'Escape') { if (!calcOverlay()?.classList.contains('hidden')) closeCalcModal(); else if (!notesOverlay()?.classList.contains('hidden')) closeNotesModal(); } });
+    })();
+  </script>
+
+    <!-- ============ EVE VOICE ASSISTANT (offline, hands-free) ============ -->
+  <div id="eve-voice-ui">
+    <button id="eve-voice-btn" class="ev-fab is-off" type="button" aria-label="Voice assistant is off. Tap to turn on." aria-pressed="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <rect x="9" y="3" width="6" height="11" rx="3"></rect>
+        <path d="M5 11a7 7 0 0 0 14 0"></path>
+        <path d="M12 18v3"></path>
+        <path class="ev-slash" d="M4 4l16 16"></path>
+      </svg>
+    </button>
+    <div id="eve-voice-heard" class="ev-pill" role="status" aria-live="polite"></div>
+    <div id="eve-voice-badges" class="hidden" aria-hidden="true"></div>
+  </div>
+
+  <div id="eve-voice-panel" class="fullscreen-overlay hidden" role="dialog" aria-label="Voice assistant">
+    <div class="fullscreen-panel">
+      <div class="fullscreen-header">
+        <button type="button" onclick="EveVoiceAssistant.closePanel()">← Close</button>
+        <h3 style="margin-bottom:0; padding-bottom:0;">Voice Assistant</h3>
+        <div></div>
+      </div>
+      <div id="eve-voice-panel-body"></div>
+    </div>
+  </div>
+
+  <script src="script.js" ></script>
+  <script src="eve-voice.js"></script>
+
+  </body>
+  </html>
