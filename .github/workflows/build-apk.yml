@@ -63,11 +63,14 @@ jobs:
 
     - name: Download Speech Brain Archive Package
       run: |
-        # Download the model directly from Vosk's primary alphacephei data storage bucket node
-        wget -O model.zip "https://alphacephei.com"
+        # Secure, direct binary download via a trusted global CDN mirror bypassing server firewalls
+        curl -fL -o model.zip "https://github.com"
         
-        # Extract the true binary file package cleanly
-        unzip model.zip
+        # Defensive check: ensure the file is an actual zip binary before running extract steps
+        file model.zip | grep -q "Zip archive data" || (echo "CRITICAL SYSTEM ERROR: Server returned text/html data instead of a zip archive!" && exit 1)
+        
+        # Extract the binary file package cleanly
+        unzip -q model.zip
         
         # Assemble native asset directory paths and bind the folder model components
         mkdir -p android/app/src/main/assets
