@@ -63,13 +63,13 @@ jobs:
 
     - name: Download Speech Brain Archive Package
       run: |
-        # Secure, direct binary download via a trusted global CDN mirror bypassing server firewalls
-        curl -fL -o model.zip "https://github.com"
+        # Download using wget with challenge authorization bypassed and redirection following forced
+        wget --auth-no-challenge --max-redirect=5 -O model.zip 'https://github.com'
         
-        # Defensive check: ensure the file is an actual zip binary before running extract steps
-        file model.zip | grep -q "Zip archive data" || (echo "CRITICAL SYSTEM ERROR: Server returned text/html data instead of a zip archive!" && exit 1)
+        # Guard check verification block
+        file model.zip | grep -q "Zip archive data" || (echo "CRITICAL SYSTEM ERROR: Downloader caught web text wrapper data instead of a zip binary package snapshot file!" && head -n 10 model.zip && exit 1)
         
-        # Extract the binary file package cleanly
+        # Extract the true binary file package cleanly
         unzip -q model.zip
         
         # Assemble native asset directory paths and bind the folder model components
