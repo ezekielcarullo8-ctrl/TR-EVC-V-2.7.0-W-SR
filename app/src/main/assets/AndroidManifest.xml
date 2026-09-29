@@ -1,0 +1,9 @@
+<!-- 1. Grants your app access to the phone's microphone -->
+<uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+<!-- 2. Tells Android 11+ that your app is allowed to look for Google's Speech Engine -->
+<queries>
+    <intent>
+        <action android:name="android.speech.RecognitionService" />
+    </intent>
+</queries>
