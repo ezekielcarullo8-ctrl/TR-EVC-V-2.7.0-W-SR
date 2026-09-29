@@ -1,4 +1,4 @@
-name: Build Android APK
+name: Build orgclasstreasrecV260 APK
 on:
   push:
     branches: [ main ]
@@ -13,83 +13,126 @@ jobs:
       with:
         node-version: 22
 
+    - name: Extract App Name from HTML Title
+      id: get_title
+      run: |
+        # Read the title from your new assets path location [7]
+        RAW_TITLE=$(grep -oP '(?<=<title>).*?(?=</title>)' app/src/main/assets/index.html || echo "treas-rec V2.6.0-EVC")
+        CLEAN_APP_NAME=$(echo "$RAW_TITLE" | sed 's/[^a-zA-Z0-9 ]//g' | xargs)
+        CLEAN_FILE_NAME=$(echo "$CLEAN_APP_NAME" | sed 's/ /_/g')
+        if [ -z "$CLEAN_APP_NAME" ]; then
+          CLEAN_APP_NAME="treas_rec_V2_6_0_EVC"
+          CLEAN_FILE_NAME="treas_rec_V2_6_0_EVC"
+        fi
+        echo "APP_NAME=$CLEAN_APP_NAME" >> $GITHUB_ENV
+        echo "FILE_NAME=$CLEAN_FILE_NAME" >> $GITHUB_ENV
+
+    - name: Structure and Configure Capacitor
+      run: |
+        mkdir -p www
+        # Sync all web files from your custom assets directory into Capacitor's build folder [7]
+        cp app/src/main/assets/* www/ || true
+        npm init -y
+        npm install @capacitor/core @capacitor/cli @capacitor/android
+        npm install @capacitor/device @capacitor/filesystem @capacitor/share
+        npm install @capawesome/capacitor-screenshot
+        npm install @capacitor/assets --save-dev
+        echo "{\"appId\": \"com.treas_rec.v2_6_0_evc\", \"appName\": \"$APP_NAME\", \"webDir\": \"www\"}" > capacitor.config.json
+        npx cap add android
+
+    - name: Obfuscate JavaScript
+      run: |
+        npm install --no-save javascript-obfuscator
+        # Obfuscate main engine logic script
+        npx javascript-obfuscator www/script.js --output www/script.js \
+          --compact true \
+          --control-flow-flattening true \
+          --control-flow-flattening-threshold 0.75 \
+          --dead-code-injection true \
+          --dead-code-injection-threshold 0.4 \
+          --self-defending true \
+          --string-array true \
+          --string-array-encoding base64 \
+          --string-array-threshold 0.75
+        
+        # Obfuscate voice assistant helper script [7]
+        npx javascript-obfuscator www/eve-voice.js --output www/eve-voice.js \
+          --compact true \
+          --string-array true \
+          --string-array-encoding base64
+
+    - name: Download Offline Speech Recognition Model
+      run: |
+        # Download the compact English vocabulary package directly from storage server
+        wget https://alphacephei.com
+        unzip vosk-model-small-en-us-0.15.zip
+        
+        # Place it inside the newly generated native layer workspace assets directory
+        mkdir -p android/app/src/main/assets
+        mv vosk-model-small-en-us-0.15 android/app/src/main/assets/model
+
+    - name: Generate App Icons
+      run: |
+        if [ -f "resources/icon.png" ]; then
+          npx capacitor-assets generate --android
+        else
+          echo "No custom icon found at resources/icon.png, using default Capacitor icon."
+        fi
+
+    - name: Sync Capacitor
+      run: npx cap sync android
+
+    - name: Full Package and Permissions Isolation
+      run: |
+        # Configure package namespace paths
+        sed -i 's/applicationId ".*"/applicationId "com.treas_rec.v2_6_0_evc"/' android/app/build.gradle
+        sed -i 's/package=".*"/package="com.treas_rec.v2_6_0_evc"/' android/app/src/main/AndroidManifest.xml
+        
+        # Inject the native Vosk dependency compilation requirements
+        echo "dependencies { implementation 'org.alphacephei:vosk-android:0.3.38' }" >> android/app/build.gradle
+        
+        # Inject microphone hardware access keys
+        sed -i '/<\/manifest>/i \    <uses-permission android:name="android.permission.RECORD_AUDIO" />\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />\n    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />\n    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />' android/app/src/main/AndroidManifest.xml
+        
+        # Register the background listener service block
+        sed -i '/<\/application>/i \        <service android:name=".EveVoiceService" android:enabled="true" android:exported="false" android:foregroundServiceType="microphone" />' android/app/src/main/AndroidManifest.xml
+
+        # Link EveVoicePlugin directly inside Capacitor's native MainActivity loader
+        sed -i '/initialize(this/i \ \ \ \ \ \ \ \ registerPlugin(EveVoicePlugin.class);' android/app/src/main/java/com/treas_rec/v2_6_0_evc/MainActivity.java || true
+
+        # Re-isolate MainActivity and drop in your repo's custom Java files [7]
+        find android/app/src/main/ -type f -name "AndroidManifest.xml" \
+          -exec sed -i -E 's/android:authorities="[^"]*\.fileprovider"/android:authorities="com.treas_rec.v2_6_0_evc.fileprovider"/g' {} +
+        find android/app/src/main/ -type f -name "MainActivity.java" \
+          -exec sed -i 's/^package .*;/package com.treas_rec.v2_6_0_evc;/' {} +
+        mkdir -p android/app/src/main/java/com/treas_rec/v2_6_0_evc
+        find android/app/src/main/java -name "MainActivity.java" \
+          ! -path "*/com/treas_rec/v2_6_0_evc/*" \
+          -exec cp {} android/app/src/main/java/com/treas_rec/v2_6_0_evc/MainActivity.java \;
+          
+        # Inject your repository's custom Java logic classes [7]
+        cp app/src/main/java/EveVoicePlugin.java android/app/src/main/java/com/treas_rec/v2_6_0_evc/EveVoicePlugin.java
+        cp app/src/main/java/EveVoiceService.java android/app/src/main/java/com/treas_rec/v2_6_0_evc/EveVoiceService.java
+
     - name: Set up JDK 21
       uses: actions/setup-java@v4
       with:
         java-version: '21'
         distribution: 'zulu'
 
-    - name: Install Capacitor and Setup App
-      run: |
-        npm init -y
-        npm install @capacitor/core @capacitor/cli @capacitor/android
-        npm install @capacitor/device @capacitor/filesystem @capacitor/share
-        npm install @capawesome/capacitor-screenshot
-        
-        # Build the capacitor config using your exact local directory layout
-        echo "{\"appId\": \"com.treas_rec.v2_6_0_evc\", \"appName\": \"TreasRecorder\", \"webDir\": \"app/src/main/assets\"}" > capacitor.config.json
-        
-        npx cap add android
-
-    - name: Download and Inject Offline Speech Model
-      run: |
-        # Download the compact English speech recognition model directly
-        wget https://alphacephei.com
-        
-        # Unzip the downloaded file package
-        unzip vosk-model-small-en-us-0.15.zip
-        
-        # Ensure the destination directory exists inside the native layout structure
-        mkdir -p android/app/src/main/assets
-        
-        # Move it directly into your native asset directory path
-        mv vosk-model-small-en-us-0.15 android/app/src/main/assets/model
-
-    - name: Inject Custom Java Voice Plugins
-      run: |
-        # Copy the pre-made Java services straight from your repository into Capacitor's build paths
-        cp app/src/main/java/EveVoicePlugin.java android/app/src/main/java/com/treas_rec/v2_6_0_evc/EveVoicePlugin.java
-        cp app/src/main/java/EveVoiceService.java android/app/src/main/java/com/treas_rec/v2_6_0_evc/EveVoiceService.java
-
-    - name: Sync Capacitor
-      run: npx cap sync android
-
-    - name: Configure Android Package Permissions & Vosk Dependency
-      run: |
-        # Setup application naming packages matching your java namespace
-        sed -i 's/applicationId ".*"/applicationId "com.treas_rec.v2_6_0_evc"/' android/app/build.gradle
-        sed -i 's/package=".*"/package="com.treas_rec.v2_6_0_evc"/' android/app/src/main/AndroidManifest.xml
-        
-        # Inject the offline Vosk compilation dependency into gradle
-        echo "dependencies { implementation 'org.alphacephei:vosk-android:0.3.38' }" >> android/app/build.gradle
-        
-        # Inject microphone hardware access keys
-        sed -i '/<\/manifest>/i \    <uses-permission android:name="android.permission.RECORD_AUDIO" />\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />\n    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />\n    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />' android/app/src/main/AndroidManifest.xml
-        
-        # Register the foreground listener service block
-        sed -i '/<\/application>/i \        <service android:name=".EveVoiceService" android:enabled="true" android:exported="false" android:foregroundServiceType="microphone" />' android/app/src/main/AndroidManifest.xml
-
-        # Link EveVoicePlugin directly inside Capacitor's native MainActivity loader
-        sed -i '/initialize(this/i \ \ \ \ \ \ \ \ registerPlugin(EveVoicePlugin.class);' android/app/src/main/java/com/treas_rec/v2_6_0_evc/MainActivity.java || true
-        
-        # Standard native isolation alignment
-        find android/app/src/main/ -type f -name "AndroidManifest.xml" \
-          -exec sed -i -E 's/android:authorities="[^"]*\.fileprovider"/android:authorities="com.treas_rec.v2_6_0_evc.fileprovider"/g' {} +
-        find android/app/src/main/ -type f -name "MainActivity.java" \
-          -exec sed -i 's/^package .*;/package com.treas_rec.v2_6_0_evc;/' {} +
-        find android/app/src/main/java -name "MainActivity.java" \
-          ! -path "*/com/treas_rec/v2_6_0_evc/*" \
-          -exec cp {} android/app/src/main/java/com/treas_rec/v2_6_0_evc/MainActivity.java \;
-
-    - name: Build Final Compiled APK Bundle
+    - name: Build APK
       run: |
         cd android
         chmod +x gradlew
         ./gradlew clean
         ./gradlew assembleDebug
 
-    - name: Upload Completed Artifact Package
+    - name: Rename APK
+      run: |
+        mv android/app/build/outputs/apk/debug/app-debug.apk ./"$FILE_NAME".apk
+
+    - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
-        name: TreasRecorder-OfflineVoice-APK
-        path: android/app/build/outputs/apk/debug/app-debug.apk
+        name: "${{ env.FILE_NAME }}-apk"
+        path: "./${{ env.FILE_NAME }}.apk"
