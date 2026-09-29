@@ -36,7 +36,7 @@ jobs:
         npm install @capacitor/device @capacitor/filesystem @capacitor/share
         npm install @capawesome/capacitor-screenshot
         
-        # FIXED: Install the official cross-platform speech recognition plugin wrapper
+        # Install the official cross-platform speech recognition plugin wrapper
         npm install @capacitor-community/speech-recognition
         
         npm install @capacitor/assets --save-dev
@@ -70,11 +70,18 @@ jobs:
         sed -i 's/applicationId ".*"/applicationId "com.treas_rec.v2_6_0_evc"/' android/app/build.gradle
         sed -i 's/namespace ".*"/namespace "com.treas_rec.v2_6_0_evc"/' android/app/build.gradle
         
+        # FIXED: Inject the external Vosk remote Maven repositories into repositories blocks
+        sed -i "s/repositories {/repositories { \n        maven { url 'https:\/\/alphacephei.com\/maven\/' }/g" android/build.gradle
+        sed -i "s/repositories {/repositories { \n        maven { url 'https:\/\/alphacephei.com\/maven\/' }/g" android/app/build.gradle
+        
+        # FIXED: Append the native Vosk SDK binary dependencies into the application module file
+        echo 'dependencies { implementation "com.alphacephei:vosk-android:0.3.47" }' >> android/app/build.gradle
+
         # Inject standard native microphone recording and notification permissions into the compiled Android Manifest
         sed -i '/<\/manifest>/i \    <uses-permission android:name="android.permission.RECORD_AUDIO" />' android/app/src/main/AndroidManifest.xml
         sed -i '/<\/manifest>/i \    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />' android/app/src/main/AndroidManifest.xml
         
-        # FIXED: Inject modern Android Package Visibility query tag required for speech recognition service mapping
+        # Inject modern Android Package Visibility query tag required for speech recognition service mapping
         sed -i '/<\/manifest>/i \    <queries><intent><action android:name="android.speech.RecognitionService" \/><\/intent><\/queries>' android/app/src/main/AndroidManifest.xml
 
         # Resolve file authority packaging isolation lines
