@@ -16,7 +16,6 @@ jobs:
     - name: Extract Project Title Metadata
       id: get_title
       run: |
-        # Pull the application window name from your specific directory files layout
         RAW_TITLE=$(grep -oP '(?<=<title>).*?(?=</title>)' app/src/main/assets/index.html || echo "treas-rec V2.6.0-EVC")
         CLEAN_APP_NAME=$(echo "$RAW_TITLE" | sed 's/[^a-zA-Z0-9 ]//g' | xargs)
         CLEAN_FILE_NAME=$(echo "$CLEAN_APP_NAME" | sed 's/ /_/g')
@@ -30,12 +29,16 @@ jobs:
     - name: Assemble Mobile Framework Space
       run: |
         mkdir -p www
-        # Sync all web assets from your repository's custom folder layout
+        # Sync your clean local assets into the build environment
         cp app/src/main/assets/* www/ || true
         npm init -y
         npm install @capacitor/core @capacitor/cli @capacitor/android
         npm install @capacitor/device @capacitor/filesystem @capacitor/share
         npm install @capawesome/capacitor-screenshot
+        
+        # FIXED: Install the official cross-platform speech recognition plugin wrapper
+        npm install @capacitor-community/speech-recognition
+        
         npm install @capacitor/assets --save-dev
         echo "{\"appId\": \"com.treas_rec.v2_6_0_evc\", \"appName\": \"$APP_NAME\", \"webDir\": \"www\"}" > capacitor.config.json
         npx cap add android
@@ -43,8 +46,6 @@ jobs:
     - name: Run Obfuscation Compression
       run: |
         npm install --no-save javascript-obfuscator
-        
-        # Guard obfuscation tasks to prevent unhandled script exceptions
         if [ -f "www/script.js" ]; then
           npx javascript-obfuscator www/script.js --output www/script.js \
             --compact true \
@@ -65,63 +66,19 @@ jobs:
             --string-array-encoding base64
         fi
 
-    - name: Download Speech Brain Archive Package
-      run: |
-        # Download the English model directly from Hugging Face's global LFS gateway mirror node
-        curl -fL -o model.zip "https://huggingface.co"
-        
-        # Absolute binary verification guard
-        file model.zip | grep -q "Zip archive data" || (echo "CRITICAL SYSTEM ERROR: Storage server returned text data instead of a zip archive binary!" && exit 1)
-        
-        # Extract the package cleanly
-        unzip -q model.zip
-        
-        # Assemble native directories and link the speech structures
-        mkdir -p android/app/src/main/assets
-        mv vosk-model-small-en-us-0.15 android/app/src/main/assets/model
-        
-        # Cleanup temporary files
-        rm model.zip
-
     - name: Synchronize Capacitor Assets
       run: npx cap sync android
 
-    - name: Configure Android Core Properties & Inject Java Classes
+    - name: Configure Android Core Properties & Permissions
       run: |
-        # Setup application packages matching your repo namespace properties
+        # Setup modern application package namespace parameters
         sed -i 's/applicationId ".*"/applicationId "com.treas_rec.v2_6_0_evc"/' android/app/build.gradle
         sed -i 's/package=".*"/package="com.treas_rec.v2_6_0_evc"/' android/app/src/main/AndroidManifest.xml
         
-        # FIXED: Inject mavenCentral globally into settings.gradle wherever the standard "google()" repository layer is defined
-        # This resolves the missing dependency exception natively for modern Android Gradle structures
-        sed -i 's/google()/google()\n        mavenCentral()/g' android/settings.gradle
-        
-        # Inject the native Vosk dependency compilation requirements into gradle build scripts
-        echo "dependencies { implementation 'org.alphacephei:vosk-android:0.3.38' }" >> android/app/build.gradle
-        
-        # Inject microphone hardware access and foreground service requirements into Manifest
-        sed -i '/<\/manifest>/i \    <uses-permission android:name="android.permission.RECORD_AUDIO" />\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />\n    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />\n    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />' android/app/src/main/AndroidManifest.xml
-        sed -i '/<\/application>/i \        <service android:name=".EveVoiceService" android:enabled="true" android:exported="false" android:foregroundServiceType="microphone" />' android/app/src/main/AndroidManifest.xml
+        # Inject standard native microphone recording permissions into the compiled Android Manifest
+        sed -i '/<\/manifest>/i \    <uses-permission android:name="android.permission.RECORD_AUDIO" />' android/app/src/main/AndroidManifest.xml
 
-        # Clear standard native launchers to override the plugin loading hooks
-        rm -rf android/app/src/main/java/com/treas_rec/v2_6_0_evc/MainActivity.java || true
-        mkdir -p android/app/src/main/java/com/treas_rec/v2_6_0_evc
-        
-        # Injects a robust MainActivity that links EveVoicePlugin natively
-        cat << 'EOF' > android/app/src/main/java/com/treas_rec/v2_6_0_evc/MainActivity.java
-        package com.treas_rec.v2_6_0_evc;
-        import android.os.Bundle;
-        import com.getcapacitor.BridgeActivity;
-        public class MainActivity extends BridgeActivity {
-            @Override
-            public void onCreate(Bundle savedInstanceState) {
-                registerPlugin(EveVoicePlugin.class);
-                super.onCreate(savedInstanceState);
-            }
-        }
-        EOF
-
-        # Standard file authority packaging isolation lines
+        # Resolve file authority packaging isolation lines
         find android/app/src/main/ -type f -name "AndroidManifest.xml" \
           -exec sed -i -E 's/android:authorities="[^"]*\.fileprovider"/android:authorities="com.treas_rec.v2_6_0_evc.fileprovider"/g' {} +
         find android/app/src/main/ -type f -name "MainActivity.java" \
@@ -129,10 +86,6 @@ jobs:
         find android/app/src/main/java -name "MainActivity.java" \
           ! -path "*/com/treas_rec/v2_6_0_evc/*" \
           -exec cp {} android/app/src/main/java/com/treas_rec/v2_6_0_evc/MainActivity.java \;
-          
-        # Inject your custom Java logic files straight from your flat repo folder into Capacitor's build paths
-        cp app/src/main/java/EveVoicePlugin.java android/app/src/main/java/com/treas_rec/v2_6_0_evc/EveVoicePlugin.java
-        cp app/src/main/java/EveVoiceService.java android/app/src/main/java/com/treas_rec/v2_6_0_evc/EveVoiceService.java
 
     - name: Set up Android JDK 21 Compiler
       uses: actions/setup-java@v4
