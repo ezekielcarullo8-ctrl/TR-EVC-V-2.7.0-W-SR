@@ -60,7 +60,7 @@ jobs:
         fi
         
         if [ -f "www/eve-voice.js" ]; then
-          # FIXED: Preserved critical speech recognition strings to prevent compression corruption
+          # Preserved critical speech recognition strings to prevent compression corruption
           npx javascript-obfuscator www/eve-voice.js --output www/eve-voice.js \
             --compact true \
             --string-array true \
@@ -73,11 +73,9 @@ jobs:
 
     - name: Configure Android Core Properties & Permissions
       run: |
-        # Setup modern application package namespace parameters inside gradle build configuration
+        # FIXED: Setup modern package properties across both applicationId and internal gradle namespace properties
         sed -i 's/applicationId ".*"/applicationId "com.treas_rec.v2_6_0_evc"/' android/app/build.gradle
-        
-        # FIXED: Corrected the malformed URL regex string match for safe XML manifest manipulation
-        sed -i 's/<manifest xmlns:android="http:\/\/schemas.android.com\/apk\/res\/android"/& package="com.treas_rec.v2_6_0_evc"/' android/app/src/main/AndroidManifest.xml
+        sed -i 's/namespace ".*"/namespace "com.treas_rec.v2_6_0_evc"/' android/app/build.gradle
         
         # Inject standard native microphone recording and notification permissions into the compiled Android Manifest
         sed -i '/<\/manifest>/i \    <uses-permission android:name="android.permission.RECORD_AUDIO" />' android/app/src/main/AndroidManifest.xml
@@ -90,7 +88,7 @@ jobs:
         find android/app/src/main/ -type f -name "AndroidManifest.xml" \
           -exec sed -i -E 's/android:authorities="[^"]*\.fileprovider"/android:authorities="com.treas_rec.v2_6_0_evc.fileprovider"/g' {} +
         
-        # CRITICAL FIX: Ensure your custom custom plugin source folder is created and map Java classes into it
+        # Ensure your custom plugin source folder is created and map Java classes into it
         mkdir -p android/app/src/main/java/com/treas_rec/v2_6_0_evc
         if [ -d "app/src/main/java" ]; then
           cp -r app/src/main/java/* android/app/src/main/java/ || true
