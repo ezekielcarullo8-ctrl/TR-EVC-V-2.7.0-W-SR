@@ -1009,3 +1009,51 @@
     _test: { norm, spokenToNumber, numWords, pesosSpoken, buildGrammar: async () => { await loadConfig(); return buildGrammar(); }, matchCommand }
   };
 })();
+
+
+// Import the Speech Recognition instance from the community package
+import { SpeechRecognition } from '@capacitor-community/speech-recognition';
+
+// 1. Request microphone permissions from the smartphone user
+async function checkAndRequestPermissions() {
+    const perm = await SpeechRecognition.checkPermissions();
+    if (perm.speechRecognition !== 'granted') {
+        await SpeechRecognition.requestPermissions();
+    }
+}
+
+// 2. Start capturing live spoken audio
+async function startListening() {
+    await checkAndRequestPermissions();
+    
+    const isAvailable = await SpeechRecognition.available();
+    if (!isAvailable.available) {
+        alert("Speech recognition is not supported or disabled on this device.");
+        return;
+    }
+
+    // Start listening session
+    SpeechRecognition.start({
+        language: 'en-US',       // Set voice language locale target
+        maxResults: 1,           // Capture only the top most accurate match result string
+        partialResults: true,    // Set to true to receive updates dynamically while the user talks
+        popup: false             // Disables standard Android legacy popup dialogs
+    });
+
+    // Listen for live voice transcription result arrays
+    SpeechRecognition.addListener('partialResults', (data) => {
+        if (data.matches && data.matches.length > 0) {
+            const spokenText = data.matches[0];
+            console.log("Transcribed Text: ", spokenText);
+            
+            // Execute your voice command checks here (e.g., matching phrases from your JSON file)
+            handleVoiceCommand(spokenText);
+        }
+    });
+}
+
+// 3. Stop capturing audio manually
+async function stopListening() {
+    await SpeechRecognition.stop();
+    SpeechRecognition.removeAllListeners();
+}
