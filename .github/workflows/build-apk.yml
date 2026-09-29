@@ -68,7 +68,7 @@ jobs:
     - name: Download Speech Brain Archive Package
       run: |
         # Download the English model directly from Hugging Face's global LFS gateway mirror node
-        curl -fL -o model.zip "https://huggingface.co/grimso/vosk-models/resolve/main/vosk-model-small-en-us-0.15.zip"
+        curl -fL -o model.zip "https://huggingface.co"
         
         # Absolute binary verification guard
         file model.zip | grep -q "Zip archive data" || (echo "CRITICAL SYSTEM ERROR: Storage server returned text data instead of a zip archive binary!" && exit 1)
@@ -92,7 +92,8 @@ jobs:
         sed -i 's/applicationId ".*"/applicationId "com.treas_rec.v2_6_0_evc"/' android/app/build.gradle
         sed -i 's/package=".*"/package="com.treas_rec.v2_6_0_evc"/' android/app/src/main/AndroidManifest.xml
         
-        # Inject mavenCentral everywhere "google()" appears inside settings.gradle to fix dependency resolution
+        # FIXED: Inject mavenCentral globally into settings.gradle wherever the standard "google()" repository layer is defined
+        # This resolves the missing dependency exception natively for modern Android Gradle structures
         sed -i 's/google()/google()\n        mavenCentral()/g' android/settings.gradle
         
         # Inject the native Vosk dependency compilation requirements into gradle build scripts
