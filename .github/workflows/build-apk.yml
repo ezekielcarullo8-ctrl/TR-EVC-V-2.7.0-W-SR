@@ -63,8 +63,8 @@ jobs:
 
     - name: Download Speech Brain Archive Package
       run: |
-        # Download the model directly from Vosk's official GitHub Release storage infrastructure
-        curl -L -o model.zip "https://github.com"
+        # Download the model directly from Vosk's primary alphacephei data storage bucket node
+        wget -O model.zip "https://alphacephei.com"
         
         # Extract the true binary file package cleanly
         unzip model.zip
