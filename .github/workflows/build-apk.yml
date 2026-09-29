@@ -26,16 +26,21 @@ jobs:
         npm install @capacitor/device @capacitor/filesystem @capacitor/share
         npm install @capawesome/capacitor-screenshot
         
-        # Build the capacitor config utilizing the exact assets folder you created
+        # Build the capacitor config using your exact local directory layout
         echo "{\"appId\": \"com.treas_rec.v2_6_0_evc\", \"appName\": \"TreasRecorder\", \"webDir\": \"app/src/main/assets\"}" > capacitor.config.json
         
         npx cap add android
 
     - name: Download and Inject Offline Speech Model
       run: |
-        # Download the compact English speech recognition model
+        # Download the compact English speech recognition model directly
         wget https://alphacephei.com
+        
+        # Unzip the downloaded file package
         unzip vosk-model-small-en-us-0.15.zip
+        
+        # Ensure the destination directory exists inside the native layout structure
+        mkdir -p android/app/src/main/assets
         
         # Move it directly into your native asset directory path
         mv vosk-model-small-en-us-0.15 android/app/src/main/assets/model
